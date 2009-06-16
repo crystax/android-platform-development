@@ -32,6 +32,7 @@ import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -992,7 +993,7 @@ public final class AvdManager {
     }
 
     /**
-     * Writes a .ini file from a set of properties.
+     * Writes a .ini file from a set of properties, using UTF-8 encoding.
      *
      * @param iniFile The file to generate.
      * @param values THe properties to place in the ini file.
@@ -1000,7 +1001,8 @@ public final class AvdManager {
      */
     private static void writeIniFile(File iniFile, Map<String, String> values)
             throws IOException {
-        FileWriter writer = new FileWriter(iniFile);
+        OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(iniFile),
+                SdkConstants.INI_CHARSET);
 
         for (Entry<String, String> entry : values.entrySet()) {
             writer.write(String.format("%1$s=%2$s\n", entry.getKey(), entry.getValue()));

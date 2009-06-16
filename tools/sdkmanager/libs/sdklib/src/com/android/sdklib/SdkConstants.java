@@ -41,7 +41,11 @@ public final class SdkConstants {
      */
     public final static int CURRENT_PLATFORM = currentPlatform();
 
-    
+    /**
+     * Charset for the ini file handled by the SDK.
+     */
+    public final static String INI_CHARSET = "UTF-8";
+
     /** An SDK Project's AndroidManifest.xml file */
     public static final String FN_ANDROID_MANIFEST_XML= "AndroidManifest.xml";
     /** An SDK Project's build.xml file */
@@ -132,7 +136,7 @@ public final class SdkConstants {
     public final static String FD_RAW = "raw"; //$NON-NLS-1$
 
     /* Folder Names for the Android SDK */
-    
+
     /** Name of the SDK platforms folder. */
     public final static String FD_PLATFORMS = "platforms";
     /** Name of the SDK addons folder. */
@@ -182,7 +186,7 @@ public final class SdkConstants {
             OS_SDK_TOOLS_FOLDER + FD_LIB + File.separator;
 
     /* Folder paths relative to a platform or add-on folder */
-    
+
     /** Path of the images directory relative to a platform or addon folder.
      *  This is an OS path, ending with a separator. */
     public final static String OS_IMAGES_FOLDER = FD_IMAGES + File.separator;
@@ -230,14 +234,14 @@ public final class SdkConstants {
     /** Path of the layoutlib.jar file relative to a platform folder. */
     public final static String OS_PLATFORM_LAYOUTLIB_JAR =
             OS_PLATFORM_DATA_FOLDER + FN_LAYOUTLIB_JAR;
-    
+
     /* Folder paths relative to a addon folder */
 
     /** Path of the images directory relative to a folder folder.
      *  This is an OS path, ending with a separator. */
     public final static String OS_ADDON_LIBS_FOLDER = FD_ADDON_LIBS + File.separator;
-    
-    
+
+
     /** Skin default **/
     public final static String SKIN_DEFAULT = "default";
 
@@ -265,7 +269,7 @@ public final class SdkConstants {
 
     /**
      * Returns current platform
-     * 
+     *
      * @return one of {@link #PLATFORM_WINDOWS}, {@link #PLATFORM_DARWIN},
      * {@link #PLATFORM_LINUX} or {@link #PLATFORM_UNKNOWN}.
      */
