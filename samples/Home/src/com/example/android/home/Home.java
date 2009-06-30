@@ -260,7 +260,8 @@ public class Home extends Activity {
             } else {
                 mFavorites.clear();
             }
-
+            mApplicationsStack.setFavorites(mFavorites);            
+            
             FileReader favReader;
 
             // Environment.getRootDirectory() is a fancy way of saying ANDROID_ROOT or "/system".
