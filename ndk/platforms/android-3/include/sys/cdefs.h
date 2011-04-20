@@ -38,11 +38,6 @@
 #define	_SYS_CDEFS_H_
 
 
-/* our implementation of wchar_t is only 8-bit - die die non-portable code */
-#undef  __WCHAR_TYPE__
-#define __WCHAR_TYPE__  unsigned char
-
-
 /*
  * Macro to test if we're using a GNU C compiler of a specific vintage
  * or later, for e.g. features that appeared in a particular version
