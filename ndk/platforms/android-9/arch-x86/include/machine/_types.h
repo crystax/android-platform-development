@@ -40,11 +40,9 @@
 #  define _SIZE_T_DEFINED_
 #  ifdef __ANDROID__
      typedef unsigned int  size_t;
-/*
 #  else
      typedef unsigned long  size_t;
 #  endif
-*/
 #endif
 #if !defined(_SSIZE_T) && !defined(_SSIZE_T_DEFINED_)
 #define _SSIZE_T
