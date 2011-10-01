@@ -14,22 +14,62 @@
 * limitations under the License.
 */
 #include "libOpenglRender/render_api.h"
+#include "IOStream.h"
 #include "FrameBuffer.h"
 #include "RenderServer.h"
 #include "osProcess.h"
 #include "TimeUtils.h"
 
+#include "EGLDispatch.h"
+#include "GLDispatch.h"
+#include "GL2Dispatch.h"
+
 static osUtils::childProcess *s_renderProc = NULL;
 static RenderServer *s_renderThread = NULL;
 static int s_renderPort = 0;
 
-#ifdef __APPLE__
-#define  RENDER_API_USE_THREAD
-#endif
+static IOStream *createRenderThread(int p_stream_buffer_size,
+                                    unsigned int clientFlags);
 
-bool initOpenGLRenderer(FBNativeWindowType window,
-                        int x, int y, int width, int height,
-                        int portNum)
+//
+// For now run the renderer as a thread inside the calling
+// process instead as running it in a separate process for all
+// platforms.
+// at the future we want it to run as a seperate process except for
+// Mac OS X since it is imposibble on this platform to make one process
+// render to a window created by another process.
+//
+//#ifdef __APPLE__
+#define  RENDER_API_USE_THREAD
+//#endif
+
+bool initLibrary(void)
+{
+    //
+    // Load EGL Plugin
+    //
+    if (!init_egl_dispatch()) {
+        // Failed to load EGL
+        printf("Failed to init_egl_dispatch\n");
+        return false;
+    }
+
+    //
+    // Load GLES Plugin
+    //
+    if (!init_gl_dispatch()) {
+        // Failed to load GLES
+        ERR("Failed to init_gl_dispatch\n");
+        return false;
+    }
+
+    /* failure to init the GLES2 dispatch table is not fatal */
+    init_gl2_dispatch();
+
+    return true;
+}
+
+bool initOpenGLRenderer(int width, int height, int portNum)
 {
 
     //
@@ -46,7 +86,7 @@ bool initOpenGLRenderer(FBNativeWindowType window,
     // initialize the renderer and listen to connections
     // on a thread in the current process.
     //
-    bool inited = FrameBuffer::initialize(window, x, y, width, height);
+    bool inited = FrameBuffer::initialize(width, height);
     if (!inited) {
         return false;
     }
@@ -105,7 +145,7 @@ bool initOpenGLRenderer(FBNativeWindowType window,
         }
 #endif
 
-        dummy = createRenderThread(8);
+        dummy = createRenderThread(8, 0);
 
         if (!dummy) {
             // stop if the process is no longer running
@@ -136,30 +176,27 @@ bool stopOpenGLRenderer()
 {
     bool ret = false;
 
+    // open a dummy connection to the renderer to make it
+    // realize the exit request.
+    // (send the exit request in clientFlags)
+    IOStream *dummy = createRenderThread(8, IOSTREAM_CLIENT_EXIT_SERVER);
+    if (!dummy) return false;
+
     if (s_renderProc) {
         //
-        // kill the render process
+        // wait for the process to exit
         //
-        ret = osUtils::KillProcess(s_renderProc->getPID(), true) != 0;
-        if (ret) {
-            delete s_renderProc;
-            s_renderProc = NULL;
-        }
+        int exitStatus;
+        ret = s_renderProc->wait(&exitStatus);
+
+        delete s_renderProc;
+        s_renderProc = NULL;
     }
     else if (s_renderThread) {
-        // flag the thread it should exit
-        s_renderThread->flagNeedExit();
 
-        // open a dummy connection to the renderer to make it
-        // realize the exit request
-        IOStream *dummy = createRenderThread(8);
-        if (dummy) {
-            // wait for the thread to exit
-            int status;
-            ret = s_renderThread->wait(&status);
-
-            delete dummy;
-        }
+        // wait for the thread to exit
+        int status;
+        ret = s_renderThread->wait(&status);
 
         delete s_renderThread;
         s_renderThread = NULL;
@@ -168,7 +205,72 @@ bool stopOpenGLRenderer()
     return ret;
 }
 
-IOStream *createRenderThread(int p_stream_buffer_size)
+bool createOpenGLSubwindow(FBNativeWindowType window,
+                           int x, int y, int width, int height, float zRot)
+{
+    if (s_renderThread) {
+        return FrameBuffer::setupSubWindow(window,x,y,width,height, zRot);
+    }
+    else {
+        //
+        // XXX: should be implemented by sending the renderer process
+        //      a request
+        ERR("%s not implemented for separate renderer process !!!\n",
+            __FUNCTION__);
+    }
+    return false;
+}
+
+bool destroyOpenGLSubwindow()
+{
+    if (s_renderThread) {
+        return FrameBuffer::removeSubWindow();
+    }
+    else {
+        //
+        // XXX: should be implemented by sending the renderer process
+        //      a request
+        ERR("%s not implemented for separate renderer process !!!\n",
+                __FUNCTION__);
+        return false;
+    }
+}
+
+void setOpenGLDisplayRotation(float zRot)
+{
+    if (s_renderThread) {
+        FrameBuffer *fb = FrameBuffer::getFB();
+        if (fb) {
+            fb->setDisplayRotation(zRot);
+        }
+    }
+    else {
+        //
+        // XXX: should be implemented by sending the renderer process
+        //      a request
+        ERR("%s not implemented for separate renderer process !!!\n",
+                __FUNCTION__);
+    }
+}
+
+void repaintOpenGLDisplay()
+{
+    if (s_renderThread) {
+        FrameBuffer *fb = FrameBuffer::getFB();
+        if (fb) {
+            fb->repost();
+        }
+    }
+    else {
+        //
+        // XXX: should be implemented by sending the renderer process
+        //      a request
+        ERR("%s not implemented for separate renderer process !!!\n",
+                __FUNCTION__);
+    }
+}
+
+IOStream *createRenderThread(int p_stream_buffer_size, unsigned int clientFlags)
 {
     TcpStream *stream = new TcpStream(p_stream_buffer_size);
     if (!stream) {
@@ -181,6 +283,14 @@ IOStream *createRenderThread(int p_stream_buffer_size)
         delete stream;
         return NULL;
     }
+
+    //
+    // send clientFlags to the renderer
+    //
+    unsigned int *pClientFlags = 
+                (unsigned int *)stream->allocBuffer(sizeof(unsigned int));
+    *pClientFlags = clientFlags;
+    stream->commitBuffer(sizeof(unsigned int));
 
     return stream;
 }

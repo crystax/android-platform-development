@@ -34,8 +34,8 @@ WindowSurface::WindowSurface() :
     m_drawContext(NULL),
     m_width(0),
     m_height(0),
-    m_useEGLImage(false),
-    m_useBindToTexture(false)
+    m_pbufWidth(0),
+    m_pbufHeight(0)
 {
 }
 
@@ -56,63 +56,16 @@ WindowSurface *WindowSurface::create(int p_config, int p_width, int p_height)
     if (!win) {
         return NULL;
     }
+    win->m_fbconf = fbconf;
 
     FrameBuffer *fb = FrameBuffer::getFB();
     const FrameBufferCaps &caps = fb->getCaps();
 
     //
-    // We can use eglimage and prevent copies if:
-    //     GL_KHR_gl_texture_2D_image is present.
-    //     and either there is no need for depth or stencil buffer
-    //     or GL_KHR_gl_renderbuffer_image present.
+    // Create a pbuffer to be used as the egl surface
+    // for that window.
     //
-#if 0
-    //XXX: This path should be implemented
-    win->m_useEGLImage =
-         (caps.has_eglimage_texture_2d &&
-          (caps.has_eglimage_renderbuffer ||
-           (fbconf->getDepthSize() + fbconf->getStencilSize() == 0)) );
-#else
-    win->m_useEGLImage = false;
-#endif
-
-    if (win->m_useEGLImage) {
-    }
-    else if (0 != (fbconf->getSurfaceType() & EGL_PBUFFER_BIT)) {
-
-        //
-        // Use Pbuffer for the rendering surface, if possible
-        // set it such that it will be able to be bound to a texture
-        // later to prevent readback.
-        //
-        EGLint pbufAttribs[12];
-        pbufAttribs[0] = EGL_WIDTH;
-        pbufAttribs[1] = p_width;
-        pbufAttribs[2] = EGL_HEIGHT;
-        pbufAttribs[3] = p_height;
-
-        if (caps.has_BindToTexture) {
-            pbufAttribs[4] = EGL_TEXTURE_FORMAT;
-            pbufAttribs[5] = EGL_TEXTURE_RGBA;
-            pbufAttribs[6] = EGL_TEXTURE_TARGET;
-            pbufAttribs[7] = EGL_TEXTURE_2D;
-            pbufAttribs[8] = EGL_NONE;
-            win->m_useBindToTexture = true;
-        }
-        else {
-            pbufAttribs[4] = EGL_NONE;
-        }
-
-        win->m_eglSurface = s_egl.eglCreatePbufferSurface(fb->getDisplay(),
-                                                    fbconf->getEGLConfig(),
-                                                    pbufAttribs);
-        if (win->m_eglSurface == EGL_NO_SURFACE) {
-            delete win;
-            return NULL;
-        }
-    }
-    else {
-        // no EGLImage support and not Pbuffer support - fail
+    if (!win->resizePbuffer(p_width, p_height)) {
         delete win;
         return NULL;
     }
@@ -132,19 +85,8 @@ void WindowSurface::flushColorBuffer()
 {
     if (m_attachedColorBuffer.Ptr() != NULL) {
 
-        if (!m_useEGLImage) {
-            bool copied = false;
-            if (m_useBindToTexture) {
-                copied = m_attachedColorBuffer->blitFromPbuffer(m_eglSurface);
-            }
-
-            if (!copied) {
-                copyToColorBuffer();
-            }
-        }
-        else {
-            //TODO: EGLImage
-        }
+        //copyToColorBuffer();
+        blitToColorBuffer();
     }
 }
 
@@ -156,6 +98,24 @@ void WindowSurface::flushColorBuffer()
 void WindowSurface::setColorBuffer(ColorBufferPtr p_colorBuffer)
 {
     m_attachedColorBuffer = p_colorBuffer;
+
+    //
+    // resize the window if the attached color buffer is of different
+    // size
+    //
+    unsigned int cbWidth = m_attachedColorBuffer->getWidth();
+    unsigned int cbHeight = m_attachedColorBuffer->getHeight();
+
+    if (cbWidth != m_width || cbHeight != m_height) {
+
+        if (m_pbufWidth && m_pbufHeight) {
+            // if we use pbuffer, need to resize it
+            resizePbuffer(cbWidth, cbHeight);
+        }
+
+        m_width = cbWidth;
+        m_height = cbHeight;
+    }
 }
 
 //
@@ -180,9 +140,6 @@ void WindowSurface::bind(RenderContextPtr p_ctx, SurfaceBindType p_bindType)
         return;  // bad param
     }
 
-    if (m_useEGLImage) {
-        // XXX: should be implemented
-    }
 }
 
 void WindowSurface::copyToColorBuffer()
@@ -261,4 +218,99 @@ void WindowSurface::copyToColorBuffer()
     s_egl.eglMakeCurrent(fb->getDisplay(), prevDrawSurf,
                          prevReadSurf, prevContext);
 
+}
+
+void WindowSurface::blitToColorBuffer()
+{
+    if (!m_width && !m_height) return;
+
+    if (m_attachedColorBuffer->getWidth() != m_width ||
+        m_attachedColorBuffer->getHeight() != m_height) {
+        // XXX: should never happen - how this needs to be handled?
+        return;
+    }
+
+    //
+    // Make the surface current
+    //
+    EGLContext prevContext = s_egl.eglGetCurrentContext();
+    EGLSurface prevReadSurf = s_egl.eglGetCurrentSurface(EGL_READ);
+    EGLSurface prevDrawSurf = s_egl.eglGetCurrentSurface(EGL_DRAW);
+    FrameBuffer *fb = FrameBuffer::getFB();
+    if (!s_egl.eglMakeCurrent(fb->getDisplay(), m_eglSurface,
+                              m_eglSurface, m_drawContext->getEGLContext())) {
+        return;
+    }
+
+    m_attachedColorBuffer->blitFromCurrentReadBuffer();
+
+    // restore current context/surface
+    s_egl.eglMakeCurrent(fb->getDisplay(), prevDrawSurf,
+                         prevReadSurf, prevContext);
+
+}
+
+bool WindowSurface::resizePbuffer(unsigned int p_width, unsigned int p_height)
+{
+    if (m_eglSurface && 
+        m_pbufWidth == p_width &&
+        m_pbufHeight == p_height) {
+        // no need to resize
+        return true;
+    }
+
+    FrameBuffer *fb = FrameBuffer::getFB();
+
+    EGLContext prevContext = s_egl.eglGetCurrentContext();
+    EGLSurface prevReadSurf = s_egl.eglGetCurrentSurface(EGL_READ);
+    EGLSurface prevDrawSurf = s_egl.eglGetCurrentSurface(EGL_DRAW);
+    EGLSurface prevPbuf = m_eglSurface;
+    bool needRebindContext = m_eglSurface &&
+                             (prevReadSurf == m_eglSurface ||
+                              prevDrawSurf == m_eglSurface);
+
+    if (needRebindContext) {
+        s_egl.eglMakeCurrent(fb->getDisplay(), EGL_NO_SURFACE,
+                              EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    }
+
+    //
+    // Destroy previous surface
+    //
+    if (m_eglSurface) {
+        s_egl.eglDestroySurface(fb->getDisplay(), m_eglSurface);
+        m_eglSurface = NULL;
+    }
+
+    const FrameBufferCaps &caps = fb->getCaps();
+
+    //
+    // Create pbuffer surface.
+    //
+    EGLint pbufAttribs[5];
+    pbufAttribs[0] = EGL_WIDTH;
+    pbufAttribs[1] = p_width;
+    pbufAttribs[2] = EGL_HEIGHT;
+    pbufAttribs[3] = p_height;
+    pbufAttribs[4] = EGL_NONE;
+
+    m_eglSurface = s_egl.eglCreatePbufferSurface(fb->getDisplay(),
+                                                 m_fbconf->getEGLConfig(),
+                                                 pbufAttribs);
+    if (m_eglSurface == EGL_NO_SURFACE) {
+        fprintf(stderr, "Renderer error: failed to create/resize pbuffer!!\n");
+        return false;
+    }
+
+    m_pbufWidth = p_width;
+    m_pbufHeight = p_height;
+
+    if (needRebindContext) {
+        s_egl.eglMakeCurrent(fb->getDisplay(), 
+                     (prevDrawSurf==prevPbuf) ? m_eglSurface : prevDrawSurf,
+                     (prevReadSurf==prevPbuf) ? m_eglSurface : prevReadSurf,
+                     prevContext);
+    }
+
+    return true;
 }

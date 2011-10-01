@@ -26,11 +26,61 @@ void GLESv2Context::init() {
         for(int i=0; i < s_glSupport.maxVertexAttribs;i++){
             m_map[i] = new GLESpointer();
         }
+        setAttribute0value(0.0, 0.0, 0.0, 1.0);
     }
     m_initialized = true;
 }
 
-GLESv2Context::GLESv2Context():GLEScontext(){};
+GLESv2Context::GLESv2Context():GLEScontext(), m_att0Array(NULL), m_att0ArrayLength(0), m_att0NeedsDisable(false){};
+
+GLESv2Context::~GLESv2Context()
+{
+    delete[] m_att0Array;
+}
+
+void GLESv2Context::setAttribute0value(float x, float y, float z, float w)
+{
+    m_attribute0value[0] = x;
+    m_attribute0value[1] = y;
+    m_attribute0value[2] = z;
+    m_attribute0value[3] = w;
+}
+
+void GLESv2Context::validateAtt0PreDraw(unsigned int count)
+{
+    m_att0NeedsDisable = false;
+
+    if(count == 0)
+        return;
+
+    int enabled = 0;
+    s_glDispatch.glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled);
+    if(enabled)
+        return;
+
+    if(count > m_att0ArrayLength)
+    {
+        delete [] m_att0Array; 
+        m_att0Array = new GLfloat[4*count];
+        m_att0ArrayLength = count;
+    }
+
+    for(unsigned int i=0; i<count; i++)
+        memcpy(m_att0Array+i*4, m_attribute0value, 4*sizeof(GLfloat));
+
+    s_glDispatch.glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, m_att0Array);
+    s_glDispatch.glEnableVertexAttribArray(0);
+
+    m_att0NeedsDisable = true;
+}
+
+void GLESv2Context::validateAtt0PostDraw(void)
+{
+    if(m_att0NeedsDisable)
+        s_glDispatch.glDisableVertexAttribArray(0);
+
+    m_att0NeedsDisable = false;
+}
 
 void GLESv2Context::setupArraysPointers(GLESConversionArrays& cArrs,GLint first,GLsizei count,GLenum type,const GLvoid* indices,bool direct) {
     ArraysMap::iterator it;
@@ -89,14 +139,16 @@ bool GLESv2Context::needConvert(GLESConversionArrays& cArrs,GLint first,GLsizei 
 
 void GLESv2Context::initExtensionString() {
     *s_glExtensions = "GL_OES_EGL_image GL_OES_depth24 GL_OES_depth32 GL_OES_element_index_uint "
-                      "GL_OES_standard_derivatives GL_OES_texture_float GL_OES_texture_float_linear "
-                      "GL_OES_compressed_paletted_texture GL_OES_compressed_ETC1_RGB8_texture ";
+                      "GL_OES_texture_float GL_OES_texture_float_linear "
+                      "GL_OES_compressed_paletted_texture GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth_texture ";
     if (s_glSupport.GL_ARB_HALF_FLOAT_PIXEL || s_glSupport.GL_NV_HALF_FLOAT)
         *s_glExtensions+="GL_OES_texture_half_float GL_OES_texture_half_float_linear ";
-    if (s_glSupport.GL_NV_PACKED_DEPTH_STENCIL)
+    if (s_glSupport.GL_EXT_PACKED_DEPTH_STENCIL)
         *s_glExtensions+="GL_OES_packed_depth_stencil ";
     if (s_glSupport.GL_ARB_HALF_FLOAT_VERTEX)
         *s_glExtensions+="GL_OES_vertex_half_float ";
+    if (s_glSupport.GL_OES_STANDARD_DERIVATIVES)
+        *s_glExtensions+="GL_OES_standard_derivatives ";
 }
 
 int GLESv2Context::getMaxTexUnits() {

@@ -72,14 +72,36 @@ ColorBuffer *ColorBuffer::create(int p_width, int p_height,
     s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     s_gl.glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
+    //
+    // create another texture for that colorbuffer for blit
+    //
+    s_gl.glGenTextures(1, &cb->m_blitTex);
+    s_gl.glBindTexture(GL_TEXTURE_2D, cb->m_blitTex);
+    s_gl.glTexImage2D(GL_TEXTURE_2D, 0, texInternalFormat,
+                      p_width, p_height, 0,
+                      texInternalFormat,
+                      GL_UNSIGNED_BYTE, NULL);
+    s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    s_gl.glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
     cb->m_width = p_width;
     cb->m_height = p_height;
+    cb->m_internalFormat = texInternalFormat;
 
     if (fb->getCaps().has_eglimage_texture_2d) {
         cb->m_eglImage = s_egl.eglCreateImageKHR(fb->getDisplay(),
-                                                 fb->getContext(),
+                                                 s_egl.eglGetCurrentContext(),
                                                  EGL_GL_TEXTURE_2D_KHR,
                                                  (EGLClientBuffer)cb->m_tex,
+                                                 NULL);
+
+        cb->m_blitEGLImage = s_egl.eglCreateImageKHR(fb->getDisplay(),
+                                                 s_egl.eglGetCurrentContext(),
+                                                 EGL_GL_TEXTURE_2D_KHR,
+                                                 (EGLClientBuffer)cb->m_blitTex,
                                                  NULL);
     }
 
@@ -90,7 +112,8 @@ ColorBuffer *ColorBuffer::create(int p_width, int p_height,
 ColorBuffer::ColorBuffer() :
     m_tex(0),
     m_eglImage(NULL),
-    m_fbo(0)
+    m_fbo(0),
+    m_internalFormat(0)
 {
 }
 
@@ -156,8 +179,8 @@ bool ColorBuffer::blitFromPbuffer(EGLSurface p_pbufSurface)
         return false;
     }
 
-    s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     s_gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     s_gl.glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
@@ -176,6 +199,92 @@ bool ColorBuffer::blitFromPbuffer(EGLSurface p_pbufSurface)
     return true;
 }
 
+bool ColorBuffer::blitFromCurrentReadBuffer()
+{
+    RenderThreadInfo *tInfo = getRenderThreadInfo();
+    if (!tInfo->currContext.Ptr()) {
+        // no Current context
+        return false;
+    }
+
+    //
+    // Create a temporary texture inside the current context
+    // from the blit_texture EGLImage and copy the pixels
+    // from the current read buffer to that texture
+    //
+    GLuint tmpTex;
+    GLint currTexBind;
+    if (tInfo->currContext->isGL2()) {
+        s_gl2.glGetIntegerv(GL_TEXTURE_BINDING_2D, &currTexBind);
+        s_gl2.glGenTextures(1,&tmpTex);
+        s_gl2.glBindTexture(GL_TEXTURE_2D, tmpTex);
+        s_gl2.glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, m_blitEGLImage);
+        s_gl2.glCopyTexImage2D(GL_TEXTURE_2D, 0, m_internalFormat,
+                               0, 0, m_width, m_height, 0);
+    }
+    else {
+        s_gl.glGetIntegerv(GL_TEXTURE_BINDING_2D, &currTexBind);
+        s_gl.glGenTextures(1,&tmpTex);
+        s_gl.glBindTexture(GL_TEXTURE_2D, tmpTex);
+        s_gl.glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, m_blitEGLImage);
+        s_gl.glCopyTexImage2D(GL_TEXTURE_2D, 0, m_internalFormat,
+                              0, 0, m_width, m_height, 0);
+    }
+
+
+    //
+    // Now bind the frame buffer context and blit from
+    // m_blitTex into m_tex
+    //
+    FrameBuffer *fb = FrameBuffer::getFB();
+    if (fb->bind_locked()) {
+
+        //
+        // bind FBO object which has this colorbuffer as render target
+        //
+        if (bind_fbo()) {
+
+            //
+            // save current viewport and match it to the current
+            // colorbuffer size
+            //
+            GLint vport[4];
+            s_gl.glGetIntegerv(GL_VIEWPORT, vport);
+            s_gl.glViewport(0, 0, m_width, m_height);
+
+            // render m_blitTex
+            s_gl.glBindTexture(GL_TEXTURE_2D, m_blitTex);
+            s_gl.glEnable(GL_TEXTURE_2D);
+            s_gl.glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+            drawTexQuad();  // this will render the texture flipped
+
+            // unbind the fbo
+            s_gl.glBindFramebufferOES(GL_FRAMEBUFFER_OES, 0);
+
+            // restrore previous viewport
+            s_gl.glViewport(vport[0], vport[1], vport[2], vport[3]);
+        }
+
+        // unbind from the FrameBuffer context
+        fb->unbind_locked();
+    }
+
+    //
+    // delete the temporary texture and restore the texture binding
+    // inside the current context
+    //
+    if (tInfo->currContext->isGL2()) {
+        s_gl2.glDeleteTextures(1, &tmpTex);
+        s_gl2.glBindTexture(GL_TEXTURE_2D, currTexBind);
+    }
+    else {
+        s_gl.glDeleteTextures(1, &tmpTex);
+        s_gl.glBindTexture(GL_TEXTURE_2D, currTexBind);
+    }
+
+    return true;
+}
+
 bool ColorBuffer::bindToTexture()
 {
     if (m_eglImage) {
@@ -190,6 +299,27 @@ bool ColorBuffer::bindToTexture()
             }
 #else
             s_gl.glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, m_eglImage);
+#endif
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ColorBuffer::bindToRenderbuffer()
+{
+    if (m_eglImage) {
+        RenderThreadInfo *tInfo = getRenderThreadInfo();
+        if (tInfo->currContext.Ptr()) {
+#ifdef WITH_GLES2
+            if (tInfo->currContext->isGL2()) {
+                s_gl2.glEGLImageTargetRenderbufferStorageOES(GL_RENDERBUFFER_OES, m_eglImage);
+            }
+            else {
+                s_gl.glEGLImageTargetRenderbufferStorageOES(GL_RENDERBUFFER_OES, m_eglImage);
+            }
+#else
+            s_gl.glEGLImageTargetRenderbufferStorageOES(GL_RENDERBUFFER_OES, m_eglImage);
 #endif
             return true;
         }
@@ -225,6 +355,7 @@ bool ColorBuffer::post()
 {
     s_gl.glBindTexture(GL_TEXTURE_2D, m_tex);
     s_gl.glEnable(GL_TEXTURE_2D);
+    s_gl.glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
     drawTexQuad();
 
     return true;

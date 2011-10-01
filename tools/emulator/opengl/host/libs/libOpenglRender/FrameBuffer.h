@@ -35,7 +35,6 @@ struct FrameBufferCaps
     bool hasGL2;
     bool has_eglimage_texture_2d;
     bool has_eglimage_renderbuffer;
-    bool has_BindToTexture;
     EGLint eglMajor;
     EGLint eglMinor;
 };
@@ -43,9 +42,11 @@ struct FrameBufferCaps
 class FrameBuffer
 {
 public:
-    static bool initialize(FBNativeWindowType p_window,
-                           int x, int y,
-                           int width, int height);
+    static bool initialize(int width, int height);
+    static bool setupSubWindow(FBNativeWindowType p_window,
+                                int x, int y,
+                                int width, int height, float zRot);
+    static bool removeSubWindow();
     static void finalize();
     static FrameBuffer *getFB() { return s_theFrameBuffer; }
 
@@ -65,22 +66,30 @@ public:
     bool  setWindowSurfaceColorBuffer(HandleType p_surface, HandleType p_colorbuffer);
     bool  flushWindowSurfaceColorBuffer(HandleType p_surface);
     bool  bindColorBufferToTexture(HandleType p_colorbuffer);
+    bool  bindColorBufferToRenderbuffer(HandleType p_colorbuffer);
     bool updateColorBuffer(HandleType p_colorbuffer,
                            int x, int y, int width, int height,
                            GLenum format, GLenum type, void *pixels);
 
-    bool post(HandleType p_colorbuffer);
+    bool post(HandleType p_colorbuffer, bool needLock = true);
+    bool repost();
 
     EGLDisplay getDisplay() const { return m_eglDisplay; }
-    EGLContext getContext() const { return m_eglContext; }
     EGLNativeWindowType getSubWindow() const { return m_subWin; }
     bool bind_locked();
     bool unbind_locked();
 
+    void setDisplayRotation(float zRot) {
+        m_zRot = zRot;
+        repost();
+    }
+
 private:
-    FrameBuffer(int p_x, int p_y, int p_width, int p_height);
+    FrameBuffer(int p_width, int p_height);
     ~FrameBuffer();
     HandleType genHandle();
+    bool bindSubwin_locked();
+    void initGLState();
 
 private:
     static FrameBuffer *s_theFrameBuffer;
@@ -99,11 +108,21 @@ private:
 
     EGLSurface m_eglSurface;
     EGLContext m_eglContext;
+    EGLSurface m_pbufSurface;
+    EGLContext m_pbufContext;
 
     EGLContext m_prevContext;
     EGLSurface m_prevReadSurf;
     EGLSurface m_prevDrawSurf;
     EGLNativeWindowType m_subWin;
     EGLNativeDisplayType m_subWinDisplay;
+    EGLConfig  m_eglConfig;
+    HandleType m_lastPostedColorBuffer;
+    float      m_zRot;
+    bool       m_eglContextInitialized;
+
+    int m_statsNumFrames;
+    long long m_statsStartTime;
+    bool m_fpsStats;
 };
 #endif

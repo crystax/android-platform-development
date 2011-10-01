@@ -23,7 +23,11 @@
 
 static int convert_keysym(int sym); // forward
 
+#ifdef __linux__
+#include <X11/Xlib.h>
+#endif
 #ifdef _WIN32
+
 #include <winsock2.h>
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 #else
@@ -44,6 +48,14 @@ int main(int argc, char *argv[])
         winWidth = width;
         winHeight = height;
     }
+
+#ifdef __linux__
+    // some OpenGL implementations may call X functions
+    // it is safer to synchronize all X calls made by all the
+    // rendering threads. (although the calls we do are locked
+    // in the FrameBuffer singleton object).
+    XInitThreads();
+#endif
 
     //
     // Inialize SDL window
@@ -80,12 +92,22 @@ int main(int argc, char *argv[])
     //
     // initialize OpenGL renderer to render in our window
     //
-    bool inited = initOpenGLRenderer(windowId, 0, 0,
-                                     winWidth, winHeight, portNum);
+    bool inited = initOpenGLRenderer(winWidth, winHeight, portNum);
     if (!inited) {
         return -1;
     }
     printf("renderer process started\n");
+
+    float zRot = 0.0f;
+    inited = createOpenGLSubwindow(windowId, 0, 0,
+                                   winWidth, winHeight, zRot);
+    if (!inited) {
+        printf("failed to create OpenGL subwindow\n");
+        stopOpenGLRenderer();
+        return -1;
+    }
+    int subwinWidth = winWidth;
+    int subwinHeight = winHeight;
 
     injector = new EventInjector(consolePort);
 
@@ -103,7 +125,7 @@ int main(int argc, char *argv[])
                     injector->sendMouseDown(ev.button.x, ev.button.y);
                     mouseDown = 1;
                 }
-		break;
+                break;
             case SDL_MOUSEBUTTONUP:
                 if (mouseDown) {
                     injector->sendMouseUp(ev.button.x,ev.button.y);
@@ -123,7 +145,41 @@ int main(int argc, char *argv[])
                   goto EXIT;
                 }
 #endif
-		injector->sendKeyDown(convert_keysym(ev.key.keysym.sym));
+                injector->sendKeyDown(convert_keysym(ev.key.keysym.sym));
+
+                if (ev.key.keysym.sym == SDLK_KP_MINUS) {
+                    subwinWidth /= 2;
+                    subwinHeight /= 2;
+                    
+                    bool stat = destroyOpenGLSubwindow();
+                    printf("destroy subwin returned %d\n", stat);
+                    stat = createOpenGLSubwindow(windowId,
+                                                (winWidth - subwinWidth) / 2,
+                                                (winHeight - subwinHeight) / 2,
+                                                subwinWidth, subwinHeight, 
+                                                zRot);
+                    printf("create subwin returned %d\n", stat);
+                }
+                else if (ev.key.keysym.sym == SDLK_KP_PLUS) {
+                    subwinWidth *= 2;
+                    subwinHeight *= 2;
+
+                    bool stat = destroyOpenGLSubwindow();
+                    printf("destroy subwin returned %d\n", stat);
+                    stat = createOpenGLSubwindow(windowId,
+                                                (winWidth - subwinWidth) / 2,
+                                                (winHeight - subwinHeight) / 2,
+                                                subwinWidth, subwinHeight, 
+                                                zRot);
+                    printf("create subwin returned %d\n", stat);
+                }
+                else if (ev.key.keysym.sym == SDLK_KP_MULTIPLY) {
+                    zRot += 10.0f;
+                    setOpenGLDisplayRotation(zRot);
+                }
+                else if (ev.key.keysym.sym == SDLK_KP_ENTER) {
+                    repaintOpenGLDisplay();
+                }
                 break;
             case SDL_KEYUP:
                 injector->sendKeyUp(convert_keysym(ev.key.keysym.sym));
@@ -164,4 +220,3 @@ static int convert_keysym(int sym)
     }
     return sym;
 }
-

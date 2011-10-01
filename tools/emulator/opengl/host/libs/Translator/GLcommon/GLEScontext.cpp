@@ -5,9 +5,10 @@
 #include <GLES/glext.h>
 #include <GLcommon/GLESvalidate.h>
 #include <GLcommon/TextureUtils.h>
+#include <GLcommon/FramebufferData.h>
+#include <strings.h>
 
 //decleration
-static int findMaxIndex(GLsizei count,GLenum type,const GLvoid* indices);
 static void convertFixedDirectLoop(const char* dataIn,unsigned int strideIn,void* dataOut,unsigned int nBytes,unsigned int strideOut,int attribSize);
 static void convertFixedIndirectLoop(const char* dataIn,unsigned int strideIn,void* dataOut,GLsizei count,GLenum indices_type,const GLvoid* indices,unsigned int strideOut,int attribSize);
 static void convertByteDirectLoop(const char* dataIn,unsigned int strideIn,void* dataOut,unsigned int nBytes,unsigned int strideOut,int attribSize);
@@ -139,7 +140,11 @@ GLEScontext::GLEScontext():
                            m_glError(GL_NO_ERROR)  ,
                            m_texState(0)          ,
                            m_arrayBuffer(0)        ,
-                           m_elementBuffer(0){};
+                           m_elementBuffer(0),
+                           m_renderbuffer(0),
+                           m_framebuffer(0)
+{
+};
 
 GLenum GLEScontext::getGLerror() {
     return m_glError;
@@ -325,7 +330,7 @@ void GLEScontext::convertDirectVBO(GLESConversionArrays& cArrs,GLint first,GLsiz
     cArrs.setArr(data,p->getStride(),GL_FLOAT);
 }
 
-static int findMaxIndex(GLsizei count,GLenum type,const GLvoid* indices) {
+int GLEScontext::findMaxIndex(GLsizei count,GLenum type,const GLvoid* indices) {
     //finding max index
     int max = 0;
     if(type == GL_UNSIGNED_BYTE) {
@@ -495,8 +500,8 @@ void GLEScontext::initCapsLocked(const GLubyte * extensionString)
     if (strstr(cstring,"GL_ARB_matrix_palette ")!=NULL)
         s_glSupport.GL_ARB_MATRIX_PALETTE = true;
 
-    if (strstr(cstring,"GL_NV_packed_depth_stencil ")!=NULL)
-        s_glSupport.GL_NV_PACKED_DEPTH_STENCIL = true;
+    if (strstr(cstring,"GL_EXT_packed_depth_stencil ")!=NULL )
+        s_glSupport.GL_EXT_PACKED_DEPTH_STENCIL = true;
 
     if (strstr(cstring,"GL_OES_read_format ")!=NULL)
         s_glSupport.GL_OES_READ_FORMAT = true;
@@ -515,6 +520,9 @@ void GLEScontext::initCapsLocked(const GLubyte * extensionString)
 
     if (strstr(cstring,"GL_ARB_ES2_compatibility ")!=NULL)
         s_glSupport.GL_ARB_ES2_COMPATIBILITY = true;
+
+    if (strstr(cstring,"GL_OES_standard_derivatives ")!=NULL)
+        s_glSupport.GL_OES_STANDARD_DERIVATIVES = true;
 
 }
 
@@ -670,4 +678,18 @@ ObjectLocalName GLEScontext::getDefaultTextureName(GLenum target) {
         break;
     }
     return name;
+}
+
+void GLEScontext::drawValidate(void)
+{
+    if(m_framebuffer == 0)
+        return;
+
+    ObjectDataPtr fbObj = m_shareGroup->getObjectData(FRAMEBUFFER,m_framebuffer);
+    if (fbObj.Ptr() == NULL)
+        return;
+
+    FramebufferData *fbData = (FramebufferData *)fbObj.Ptr();
+
+    fbData->validate(this);
 }

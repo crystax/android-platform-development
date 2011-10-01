@@ -80,6 +80,11 @@ private:
     //
     ObjectLocalName genName(ObjectLocalName p_localName, bool genGlobal, bool genLocal);
 
+    // genGlobalName() - This function creates a global name
+    //                   with no associated local name, for the
+    //                   translator internal use.
+    unsigned int genGlobalName(void);
+
     //
     // getGlobalName - returns the global name of an object or 0 if the object
     //                 does not exist.
@@ -118,48 +123,13 @@ private:
 class GlobalNameSpace
 {
 public:
-    GlobalNameSpace()
-    {
-        mutex_init(&m_lock);
-
-        for (int i=0; i<NUM_OBJECT_TYPES; i++) {
-            m_nameSpace[i] = new NameSpace((NamedObjectType)i, NULL);
-        }
-
-    }
-
-    ~GlobalNameSpace()
-    {
-        mutex_lock(&m_lock);
-        for (int i=0; i<NUM_OBJECT_TYPES; i++) {
-            delete m_nameSpace[i];
-        }
-        mutex_unlock(&m_lock);
-        mutex_destroy(&m_lock);
-    }
-
-    unsigned int genName(NamedObjectType p_type)
-    {
-        if ( p_type >= NUM_OBJECT_TYPES ) return 0;
-
-        mutex_lock(&m_lock);
-        unsigned int name = m_nameSpace[p_type]->genName(0, false,true);
-        mutex_unlock(&m_lock);
-        return name;
-    }
-
-    void deleteName(NamedObjectType p_type, unsigned int p_name)
-    {
-        if ( p_type >= NUM_OBJECT_TYPES ) return;
-
-        mutex_lock(&m_lock);
-        m_nameSpace[p_type]->deleteName(p_name);
-        mutex_unlock(&m_lock);
-    }
+    GlobalNameSpace();
+    ~GlobalNameSpace();
+    unsigned int genName(NamedObjectType p_type);
+    void deleteName(NamedObjectType p_type, unsigned int p_name);
 
 private:
     mutex_t m_lock;
-    NameSpace *m_nameSpace[NUM_OBJECT_TYPES];
 };
 
 //
@@ -184,6 +154,11 @@ public:
     //           which can be queried using the getGlobalName function.
     //
     ObjectLocalName genName(NamedObjectType p_type, ObjectLocalName p_localName = 0, bool genLocal= false);
+
+    // genGlobalName() - This function creates a global name
+    //                   with no associated local name, for the
+    //                   translator internal use.
+    unsigned int genGlobalName(NamedObjectType p_type);
 
     //
     // getGlobalName - retrieves the "global" name of an object or 0 if the

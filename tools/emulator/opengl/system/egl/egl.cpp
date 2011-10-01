@@ -20,6 +20,9 @@
 #include <cutils/log.h>
 #include "gralloc_cb.h"
 #include "GLClientState.h"
+#include "GLSharedGroup.h"
+#include "eglContext.h"
+#include "ClientAPIExts.h"
 
 #include "GLEncoder.h"
 #ifdef WITH_GLES2
@@ -128,40 +131,12 @@ const char *  eglStrError(EGLint err)
     }
 
 
-// ----------------------------------------------------------------------------
-//EGLContext_t
-
-struct EGLContext_t {
-
-    enum {
-        IS_CURRENT      =   0x00010000,
-        NEVER_CURRENT   =   0x00020000
-    };
-
-    EGLContext_t(EGLDisplay dpy, EGLConfig config);
-    ~EGLContext_t();
-    uint32_t            flags;
-    EGLDisplay          dpy;
-    EGLConfig           config;
-    EGLSurface          read;
-    EGLSurface          draw;
-    EGLint                version;
-    uint32_t             rcContext;
-    const char*         versionString;
-    const char*         vendorString;
-    const char*         rendererString;
-    const char*         extensionString;
-
-    GLClientState * getClientState(){ return clientState; }
-private:
-    GLClientState    *    clientState;
-};
-
-EGLContext_t::EGLContext_t(EGLDisplay dpy, EGLConfig config) :
+EGLContext_t::EGLContext_t(EGLDisplay dpy, EGLConfig config, EGLContext_t* shareCtx) :
     dpy(dpy),
     config(config),
     read(EGL_NO_SURFACE),
     draw(EGL_NO_SURFACE),
+    shareCtx(shareCtx),
     rcContext(0),
     versionString(NULL),
     vendorString(NULL),
@@ -171,6 +146,8 @@ EGLContext_t::EGLContext_t(EGLDisplay dpy, EGLConfig config) :
     flags = 0;
     version = 1;
     clientState = new GLClientState();
+    if (shareCtx) sharedGroup = shareCtx->getSharedGroup();
+    else sharedGroup = GLSharedGroupPtr(new GLSharedGroup());
 };
 
 EGLContext_t::~EGLContext_t()
@@ -361,8 +338,15 @@ EGLBoolean egl_window_surface_t::swapBuffers()
 
     rcEnc->rcFlushWindowColorBuffer(rcEnc, rcSurface);
 
+    android_native_buffer_t* prevBuf = buffer;
     //post the back buffer
     nativeWindow->queueBuffer(nativeWindow, buffer);
+
+    buffer->common.incRef(&buffer->common);
+
+    if (prevBuf) {
+        prevBuf->common.decRef(&prevBuf->common);
+    }
 
     // dequeue a new buffer
     if (nativeWindow->dequeueBuffer(nativeWindow, &buffer)) {
@@ -564,7 +548,9 @@ EGLBoolean eglTerminate(EGLDisplay dpy)
 
 EGLint eglGetError()
 {
-    return getEGLThreadInfo()->eglError;
+    EGLint error = getEGLThreadInfo()->eglError;
+    getEGLThreadInfo()->eglError = EGL_SUCCESS;
+    return error;
 }
 
 __eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *procname)
@@ -585,19 +571,8 @@ __eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *procname)
         }
     }
 
-    // look in gles
-    void *proc = s_display.gles_iface()->getProcAddress( procname );
-    if (proc != NULL) {
-        return (__eglMustCastToProperFunctionPointerType)proc;
-    }
-
-    // look in gles2
-    if (s_display.gles2_iface() != NULL) {
-        proc = s_display.gles2_iface()->getProcAddress( procname );
-        if (proc != NULL) {
-            return (__eglMustCastToProperFunctionPointerType)proc;
-        }
-    }
+    // look in gles client api's extensions table
+    return (__eglMustCastToProperFunctionPointerType)ClientAPIExts::getProcAddress(procname);
 
     // Fail - function not found.
     return NULL;
@@ -922,8 +897,9 @@ EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config, EGLContext share_c
     }
 
     uint32_t rcShareCtx = 0;
+    EGLContext_t * shareCtx = NULL;
     if (share_context) {
-        EGLContext_t * shareCtx = static_cast<EGLContext_t*>(share_context);
+        shareCtx = static_cast<EGLContext_t*>(share_context);
         rcShareCtx = shareCtx->rcContext;
         if (shareCtx->dpy != dpy)
             setErrorReturn(EGL_BAD_MATCH, EGL_NO_CONTEXT);
@@ -936,7 +912,7 @@ EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config, EGLContext share_c
         setErrorReturn(EGL_BAD_ALLOC, EGL_NO_CONTEXT);
     }
 
-    EGLContext_t * context = new EGLContext_t(dpy, config);
+    EGLContext_t * context = new EGLContext_t(dpy, config, shareCtx);
     if (!context)
         setErrorReturn(EGL_BAD_ALLOC, EGL_NO_CONTEXT);
 
@@ -1024,10 +1000,24 @@ EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLC
         //set the client state
         if (context->version == 2) {
             hostCon->gl2Encoder()->setClientState(context->getClientState());
+            hostCon->gl2Encoder()->setSharedGroup(context->getSharedGroup());
         }
         else {
             hostCon->glEncoder()->setClientState(context->getClientState());
+            hostCon->glEncoder()->setSharedGroup(context->getSharedGroup());
         }
+    } 
+    else {
+        //release ClientState & SharedGroup
+        if (tInfo->currentContext->version == 2) {
+            hostCon->gl2Encoder()->setClientState(NULL);
+            hostCon->gl2Encoder()->setSharedGroup(GLSharedGroupPtr(NULL));
+        }
+        else {
+            hostCon->glEncoder()->setClientState(NULL);
+            hostCon->glEncoder()->setSharedGroup(GLSharedGroupPtr(NULL));
+        }
+
     }
 
     if (tInfo->currentContext)
@@ -1042,12 +1032,14 @@ EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLC
             if (!hostCon->gl2Encoder()->isInitialized()) {
                 s_display.gles2_iface()->init();
                 hostCon->gl2Encoder()->setInitialized();
+                ClientAPIExts::initClientFuncs(s_display.gles2_iface(), 1);
             }
         }
         else {
             if (!hostCon->glEncoder()->isInitialized()) {
                 s_display.gles_iface()->init();
                 hostCon->glEncoder()->setInitialized();
+                ClientAPIExts::initClientFuncs(s_display.gles_iface(), 0);
             }
         }
     }
@@ -1186,7 +1178,6 @@ EGLBoolean eglUnlockSurfaceKHR(EGLDisplay display, EGLSurface surface)
 EGLImageKHR eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attrib_list)
 {
     VALIDATE_DISPLAY_INIT(dpy, EGL_NO_IMAGE_KHR);
-
     if (ctx != EGL_NO_CONTEXT) {
         setErrorReturn(EGL_BAD_CONTEXT, EGL_NO_IMAGE_KHR);
     }
@@ -1222,7 +1213,6 @@ EGLImageKHR eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EG
 EGLBoolean eglDestroyImageKHR(EGLDisplay dpy, EGLImageKHR img)
 {
     VALIDATE_DISPLAY_INIT(dpy, EGL_FALSE);
-
     android_native_buffer_t* native_buffer = (android_native_buffer_t*)img;
 
     if (native_buffer->common.magic != ANDROID_NATIVE_BUFFER_MAGIC)

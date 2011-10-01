@@ -43,7 +43,7 @@ int GL2Decoder::initGL(get_proc_func_t getProcFunc, void *getProcFuncData)
 
         m_GL2library = osUtils::dynLibrary::open(libname);
         if (m_GL2library == NULL) {
-            fprintf(stderr, "Couldn't find %s \n", libname);
+            fprintf(stderr, "%s: Couldn't find %s \n", __FUNCTION__, libname);
             return -1;
         }
         this->initDispatchByName(s_getProc, this);
@@ -58,8 +58,16 @@ int GL2Decoder::initGL(get_proc_func_t getProcFunc, void *getProcFuncData)
     set_glDrawElementsOffset(s_glDrawElementsOffset);
     set_glDrawElementsData(s_glDrawElementsData);
     set_glShaderString(s_glShaderString);
+    set_glFinishRoundTrip(s_glFinishRoundTrip);
     return 0;
 
+}
+
+int GL2Decoder::s_glFinishRoundTrip(void *self)
+{
+    GL2Decoder *ctx = (GL2Decoder *)self;
+    ctx->glFinish();
+    return 0;
 }
 
 void GL2Decoder::s_glGetCompressedTextureFormats(void *self, int count, GLint *formats)
@@ -69,7 +77,7 @@ void GL2Decoder::s_glGetCompressedTextureFormats(void *self, int count, GLint *f
     int nFormats;
     ctx->glGetIntegerv(GL_NUM_COMPRESSED_TEXTURE_FORMATS, &nFormats);
     if (nFormats > count) {
-        fprintf(stderr, "GetCompressedTextureFormats: The requested number of formats does not match the number that is reported by OpenGL\n");
+        fprintf(stderr, "%s: GetCompressedTextureFormats: The requested number of formats does not match the number that is reported by OpenGL\n", __FUNCTION__);
     } else {
         ctx->glGetIntegerv(GL_COMPRESSED_TEXTURE_FORMATS, formats);
     }

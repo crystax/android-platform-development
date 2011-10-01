@@ -19,6 +19,7 @@
 #include "gl2_enc.h"
 #include "IOStream.h"
 #include "GLClientState.h"
+#include "GLSharedGroup.h"
 #include "FixedBuffer.h"
 
 
@@ -29,7 +30,9 @@ public:
     void setClientState(GLClientState *state) {
         m_state = state;
     }
+    void setSharedGroup(GLSharedGroupPtr shared){ m_shared = shared; }
     const GLClientState *state() { return m_state; }
+    const GLSharedGroupPtr shared() { return m_shared; }
     void flush() {
         gl2_encoder_context_t::m_stream->flush();
     }
@@ -44,6 +47,7 @@ private:
 
     bool    m_initialized;
     GLClientState *m_state;
+    GLSharedGroupPtr m_shared;
     GLenum  m_error;
 
     GLint *m_compressedTextureFormats;
@@ -68,6 +72,14 @@ private:
 
     glBindBuffer_client_proc_t m_glBindBuffer_enc;
     static void s_glBindBuffer(void *self, GLenum target, GLuint id);
+
+    
+    glBufferData_client_proc_t m_glBufferData_enc;
+    static void s_glBufferData(void *self, GLenum target, GLsizeiptr size, const GLvoid * data, GLenum usage);
+    glBufferSubData_client_proc_t m_glBufferSubData_enc;
+    static void s_glBufferSubData(void *self, GLenum target, GLintptr offset, GLsizeiptr size, const GLvoid * data);
+    glDeleteBuffers_client_proc_t m_glDeleteBuffers_enc;
+    static void s_glDeleteBuffers(void *self, GLsizei n, const GLuint * buffers);
 
     glDrawArrays_client_proc_t m_glDrawArrays_enc;
     static void s_glDrawArrays(void *self, GLenum mode, GLint first, GLsizei count);
@@ -107,5 +119,71 @@ private:
     static void s_glShaderSource(void *self, GLuint shader, GLsizei count, const GLchar **string, const GLint *length);
 
     static void s_glFinish(void *self);
+
+    glLinkProgram_client_proc_t m_glLinkProgram_enc;
+    static void s_glLinkProgram(void *self, GLuint program);
+
+    glDeleteProgram_client_proc_t m_glDeleteProgram_enc;
+    static void s_glDeleteProgram(void * self, GLuint program);
+
+    glGetUniformiv_client_proc_t m_glGetUniformiv_enc;
+    static void s_glGetUniformiv(void *self, GLuint program, GLint location , GLint *params);
+
+    glGetUniformfv_client_proc_t m_glGetUniformfv_enc;
+    static void s_glGetUniformfv(void *self, GLuint program, GLint location , GLfloat *params);
+
+    glCreateProgram_client_proc_t m_glCreateProgram_enc;
+    static GLuint s_glCreateProgram(void *self);
+
+    glCreateShader_client_proc_t m_glCreateShader_enc;
+    static GLuint s_glCreateShader(void *self, GLenum shaderType);
+
+    glDeleteShader_client_proc_t m_glDeleteShader_enc;
+    static void s_glDeleteShader(void *self, GLuint shader);
+
+    glGetUniformLocation_client_proc_t m_glGetUniformLocation_enc;
+    static int s_glGetUniformLocation(void *self, GLuint program, const GLchar *name);
+    glUseProgram_client_proc_t m_glUseProgram_enc;
+
+    glUniform1f_client_proc_t m_glUniform1f_enc;
+    glUniform1fv_client_proc_t m_glUniform1fv_enc;
+    glUniform1i_client_proc_t m_glUniform1i_enc;
+    glUniform1iv_client_proc_t m_glUniform1iv_enc;
+    glUniform2f_client_proc_t m_glUniform2f_enc;
+    glUniform2fv_client_proc_t m_glUniform2fv_enc;
+    glUniform2i_client_proc_t m_glUniform2i_enc;
+    glUniform2iv_client_proc_t m_glUniform2iv_enc;
+    glUniform3f_client_proc_t m_glUniform3f_enc;
+    glUniform3fv_client_proc_t m_glUniform3fv_enc;
+    glUniform3i_client_proc_t m_glUniform3i_enc;
+    glUniform3iv_client_proc_t m_glUniform3iv_enc;
+    glUniform4f_client_proc_t m_glUniform4f_enc;
+    glUniform4fv_client_proc_t m_glUniform4fv_enc;
+    glUniform4i_client_proc_t m_glUniform4i_enc;
+    glUniform4iv_client_proc_t m_glUniform4iv_enc;
+    glUniformMatrix2fv_client_proc_t m_glUniformMatrix2fv_enc;
+    glUniformMatrix3fv_client_proc_t m_glUniformMatrix3fv_enc;
+    glUniformMatrix4fv_client_proc_t m_glUniformMatrix4fv_enc;
+
+    static void s_glUseProgram(void *self, GLuint program);
+	static void s_glUniform1f(void *self , GLint location, GLfloat x);
+	static void s_glUniform1fv(void *self , GLint location, GLsizei count, const GLfloat* v);
+	static void s_glUniform1i(void *self , GLint location, GLint x);
+	static void s_glUniform1iv(void *self , GLint location, GLsizei count, const GLint* v);
+	static void s_glUniform2f(void *self , GLint location, GLfloat x, GLfloat y);
+	static void s_glUniform2fv(void *self , GLint location, GLsizei count, const GLfloat* v);
+	static void s_glUniform2i(void *self , GLint location, GLint x, GLint y);
+	static void s_glUniform2iv(void *self , GLint location, GLsizei count, const GLint* v);
+	static void s_glUniform3f(void *self , GLint location, GLfloat x, GLfloat y, GLfloat z);
+	static void s_glUniform3fv(void *self , GLint location, GLsizei count, const GLfloat* v);
+	static void s_glUniform3i(void *self , GLint location, GLint x, GLint y, GLint z);
+	static void s_glUniform3iv(void *self , GLint location, GLsizei count, const GLint* v);
+	static void s_glUniform4f(void *self , GLint location, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
+	static void s_glUniform4fv(void *self , GLint location, GLsizei count, const GLfloat* v);
+	static void s_glUniform4i(void *self , GLint location, GLint x, GLint y, GLint z, GLint w);
+	static void s_glUniform4iv(void *self , GLint location, GLsizei count, const GLint* v);
+	static void s_glUniformMatrix2fv(void *self , GLint location, GLsizei count, GLboolean transpose, const GLfloat* value);
+	static void s_glUniformMatrix3fv(void *self , GLint location, GLsizei count, GLboolean transpose, const GLfloat* value);
+	static void s_glUniformMatrix4fv(void *self , GLint location, GLsizei count, GLboolean transpose, const GLfloat* value);
 };
 #endif

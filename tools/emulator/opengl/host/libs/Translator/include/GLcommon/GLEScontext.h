@@ -41,10 +41,10 @@ struct GLSupport {
                 maxTexImageUnits(0),maxTexSize(0) , \
                 GL_EXT_TEXTURE_FORMAT_BGRA8888(false), GL_EXT_FRAMEBUFFER_OBJECT(false), \
                 GL_ARB_VERTEX_BLEND(false), GL_ARB_MATRIX_PALETTE(false), \
-                GL_NV_PACKED_DEPTH_STENCIL(false) , GL_OES_READ_FORMAT(false), \
+                GL_EXT_PACKED_DEPTH_STENCIL(false) , GL_OES_READ_FORMAT(false), \
                 GL_ARB_HALF_FLOAT_PIXEL(false), GL_NV_HALF_FLOAT(false), \
                 GL_ARB_HALF_FLOAT_VERTEX(false),GL_SGIS_GENERATE_MIPMAP(false),
-                GL_ARB_ES2_COMPATIBILITY(false) {} ;
+                GL_ARB_ES2_COMPATIBILITY(false),GL_OES_STANDARD_DERIVATIVES(false) {} ;
     int  maxLights;
     int  maxVertexAttribs;
     int  maxClipPlane;
@@ -56,13 +56,14 @@ struct GLSupport {
     bool GL_EXT_FRAMEBUFFER_OBJECT;
     bool GL_ARB_VERTEX_BLEND;
     bool GL_ARB_MATRIX_PALETTE;
-    bool GL_NV_PACKED_DEPTH_STENCIL;
+    bool GL_EXT_PACKED_DEPTH_STENCIL;
     bool GL_OES_READ_FORMAT;
     bool GL_ARB_HALF_FLOAT_PIXEL;
     bool GL_NV_HALF_FLOAT;
     bool GL_ARB_HALF_FLOAT_VERTEX;
     bool GL_SGIS_GENERATE_MIPMAP;
     bool GL_ARB_ES2_COMPATIBILITY;
+    bool GL_OES_STANDARD_DERIVATIVES;
 
 };
 
@@ -103,6 +104,7 @@ public:
     GLenum getGLerror();
     void setGLerror(GLenum err);
     void setShareGroup(ShareGroupPtr grp){m_shareGroup = grp;};
+    ShareGroupPtr shareGroup() const { return m_shareGroup; }
     virtual void setActiveTexture(GLenum tex);
     unsigned int getBindedTexture(GLenum target);
     unsigned int getBindedTexture(GLenum unit,GLenum target);
@@ -134,6 +136,12 @@ public:
     virtual GLSupport*  getCaps(){return &s_glSupport;};
     virtual ~GLEScontext();
     virtual int getMaxTexUnits() = 0;
+    virtual void drawValidate(void);
+
+    void setRenderbufferBinding(GLuint rb) { m_renderbuffer = rb; }
+    GLuint getRenderbufferBinding() const { return m_renderbuffer; }
+    void setFramebufferBinding(GLuint fb) { m_framebuffer = fb; }
+    GLuint getFramebufferBinding() const { return m_framebuffer; }
 
     static GLDispatch& dispatcher(){return s_glDispatch;};
 
@@ -142,6 +150,8 @@ public:
     static int getMaxTexSize(){return s_glSupport.maxTexSize;}
     static Version glslVersion(){return s_glSupport.glslVersion;}
     static bool isAutoMipmapSupported(){return s_glSupport.GL_SGIS_GENERATE_MIPMAP;}
+    static TextureTarget GLTextureTargetToLocal(GLenum target);
+    static int findMaxIndex(GLsizei count,GLenum type,const GLvoid* indices);
 
     virtual bool glGetIntegerv(GLenum pname, GLint *params);
     virtual bool glGetBooleanv(GLenum pname, GLboolean *params);
@@ -169,13 +179,14 @@ private:
 
     virtual void setupArr(const GLvoid* arr,GLenum arrayType,GLenum dataType,GLint size,GLsizei stride, GLboolean normalized, int pointsIndex = -1) = 0 ;
     GLuint getBuffer(GLenum target);
-    TextureTarget GLTextureTargetToLocal(GLenum target);
 
     ShareGroupPtr         m_shareGroup;
     GLenum                m_glError;
     textureUnitState*     m_texState;
     unsigned int          m_arrayBuffer;
     unsigned int          m_elementBuffer;
+    GLuint                m_renderbuffer;
+    GLuint                m_framebuffer;
 };
 
 #endif

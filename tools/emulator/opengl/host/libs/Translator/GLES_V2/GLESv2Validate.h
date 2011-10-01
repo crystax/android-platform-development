@@ -33,6 +33,11 @@ static bool readPixelFrmt(GLenum format);
 static bool shaderType(GLenum type);
 static bool precisionType(GLenum type);
 static bool arrayIndex(GLEScontext * ctx,GLuint index);
+static bool pixelType(GLEScontext * ctx,GLenum type);
+static bool pixelFrmt(GLEScontext* ctx,GLenum format);
+static bool attribName(const GLchar* name);
+static bool attribIndex(int index);
+static bool programParam(GLenum pname);
 };
 
 #endif

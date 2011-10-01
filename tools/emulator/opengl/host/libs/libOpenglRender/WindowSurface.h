@@ -18,6 +18,7 @@
 
 #include "ColorBuffer.h"
 #include "RenderContext.h"
+#include "FBConfig.h"
 #include "SmartPtr.h"
 #include "FixedBuffer.h"
 #include <EGL/egl.h>
@@ -44,6 +45,8 @@ private:
     WindowSurface();
 
     void copyToColorBuffer();  // copy pbuffer content with readback+download
+    void blitToColorBuffer();  // copy pbuffer content with texload and blit
+    bool resizePbuffer(unsigned int p_width, unsigned int p_height);
 
 private:
     GLuint m_fbObj;   // GLES Framebuffer object (when EGLimage is used)
@@ -55,10 +58,13 @@ private:
     RenderContextPtr m_drawContext;
     GLuint m_width;
     GLuint m_height;
+    GLuint m_pbufWidth;
+    GLuint m_pbufHeight;
     bool m_useEGLImage;
     bool m_useBindToTexture;
     FixedBuffer m_xferBuffer;
     FixedBuffer m_xUpdateBuf;
+    const FBConfig *m_fbconf;
 };
 
 typedef SmartPtr<WindowSurface> WindowSurfacePtr;

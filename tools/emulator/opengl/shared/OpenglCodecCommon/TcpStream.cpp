@@ -23,6 +23,9 @@
 
 #ifndef _WIN32
 #include <netinet/in.h>
+#include <netinet/tcp.h>
+#else
+#include <ws2tcpip.h>
 #endif
 
 TcpStream::TcpStream(size_t bufSize) :
@@ -39,12 +42,25 @@ TcpStream::TcpStream(int sock, size_t bufSize) :
     m_bufsize(bufSize),
     m_buf(NULL)
 {
+    // disable Nagle algorithm to improve bandwidth of small
+    // packets which are quite common in our implementation.
+#ifdef _WIN32
+    DWORD  flag;
+#else
+    int    flag;
+#endif
+    flag = 1;
+    setsockopt( sock, IPPROTO_TCP, TCP_NODELAY, (const char*)&flag, sizeof(flag) );
 }
 
 TcpStream::~TcpStream()
 {
     if (m_sock >= 0) {
+#ifdef _WIN32
+        closesocket(m_sock);
+#else
         ::close(m_sock);
+#endif
     }
     if (m_buf != NULL) {
         free(m_buf);

@@ -116,7 +116,7 @@ bool GLEScmValidate::texParams(GLenum target,GLenum pname) {
     default:
         return false;
     }
-    return target == GL_TEXTURE_2D;
+    return (target == GL_TEXTURE_2D)||(target == GL_TEXTURE_CUBE_MAP_OES);
 }
 
 bool GLEScmValidate::texEnv(GLenum target,GLenum pname) {
@@ -230,7 +230,7 @@ bool GLEScmValidate::renderbufferInternalFrmt(GLEScontext* ctx, GLenum internalf
     case GL_DEPTH_COMPONENT32_OES:
         return true;
     }
-    if (ctx->getCaps()->GL_NV_PACKED_DEPTH_STENCIL && internalformat==GL_DEPTH24_STENCIL8_OES)
+    if (ctx->getCaps()->GL_EXT_PACKED_DEPTH_STENCIL && internalformat==GL_DEPTH24_STENCIL8_OES)
         return true;
 
     return false;

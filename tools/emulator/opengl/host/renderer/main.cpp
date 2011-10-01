@@ -26,6 +26,9 @@
 #include <winsock2.h>
 #endif
 
+#ifdef __linux__
+#include <X11/Xlib.h>
+#endif
 
 static void printUsage(const char *progName)
 {
@@ -105,13 +108,28 @@ int main(int argc, char *argv[])
             printf( "could not initialize Winsock\n" );
     }
 #endif
+
+#ifdef __linux__
+    // some OpenGL implementations may call X functions
+    // it is safer to synchronize all X calls made by all the
+    // rendering threads. (although the calls we do are locked
+    // in the FrameBuffer singleton object).
+    XInitThreads();
+#endif
+
     //
     // initialize Framebuffer
     //
-    bool inited = FrameBuffer::initialize(windowId,
-                                          winX, winY, winWidth, winHeight);
+    bool inited = FrameBuffer::initialize(winWidth, winHeight);
     if (!inited) {
         fprintf(stderr,"Failed to initialize Framebuffer\n");
+        return -1;
+    }
+
+    inited = FrameBuffer::setupSubWindow(windowId,
+                                         winX, winY, winWidth, winHeight, 0.0);
+    if (!inited) {
+        fprintf(stderr,"Failed to create subwindow Framebuffer\n");
         return -1;
     }
 
@@ -128,7 +146,7 @@ int main(int argc, char *argv[])
     //
     // run the server listener loop
     //
-    server->Main(); // never returns
+    server->Main();
 #else
     //
     // on windows we need to handle messages for the
@@ -140,12 +158,13 @@ int main(int argc, char *argv[])
 
     //
     // Dispatch events for the subwindow
+    // During termination of the render server, the FrameBuffer
+    // will be finalized, the Framebuffer subwindow will
+    // get destroyed and the following loop will exit.
     //
     MSG msg;
     HWND hWnd = FrameBuffer::getFB()->getSubWindow();
-    bool done = 0;
-    while(!done) {
-        GetMessage(&msg, hWnd, 0, 0);
+    while( GetMessage(&msg, hWnd, 0, 0) > 0 ) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }

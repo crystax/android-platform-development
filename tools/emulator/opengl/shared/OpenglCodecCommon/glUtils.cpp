@@ -27,10 +27,13 @@ size_t glSizeof(GLenum type)
         break;
     case GL_SHORT:
     case GL_UNSIGNED_SHORT:
+    case GL_HALF_FLOAT_OES:
         retval = 2;
         break;
+    case GL_INT:
     case GL_FLOAT:
     case GL_FIXED:
+    case GL_BOOL:
         retval =  4;
         break;
 #ifdef GL_DOUBLE
@@ -38,6 +41,34 @@ size_t glSizeof(GLenum type)
         retval = 8;
         break;
 #endif
+    case GL_FLOAT_VEC2:
+    case GL_INT_VEC2:
+    case GL_BOOL_VEC2:
+        retval = 8;
+        break;
+    case GL_INT_VEC3:
+    case GL_BOOL_VEC3:
+    case GL_FLOAT_VEC3:
+        retval = 12;
+        break;
+    case GL_FLOAT_VEC4:
+    case GL_BOOL_VEC4:
+    case GL_INT_VEC4:
+    case GL_FLOAT_MAT2:
+        retval = 16;
+        break;
+    case GL_FLOAT_MAT3:
+        retval = 36;
+        break;
+    case GL_FLOAT_MAT4:
+        retval = 64;
+        break;
+    case GL_SAMPLER_2D:
+    case GL_SAMPLER_CUBE:
+        retval = 4;
+        break;
+    default:
+        ERR("**** ERROR unknown type 0x%x (%s,%d)\n", type, __FUNCTION__,__LINE__);
     }
     return retval;
 
@@ -247,6 +278,7 @@ size_t glUtilsParamSize(GLenum param)
     case GL_MAX_TEXTURE_IMAGE_UNITS:
     case GL_REQUIRED_TEXTURE_IMAGE_UNITS_OES:
     case GL_FRAGMENT_SHADER_DERIVATIVE_HINT_OES:
+    case GL_LINE_WIDTH:
         s = 1;
         break;
     case GL_ALIASED_LINE_WIDTH_RANGE:
@@ -279,6 +311,7 @@ size_t glUtilsParamSize(GLenum param)
     case GL_COLOR_CLEAR_VALUE:
     case GL_COLOR_WRITEMASK:
     case GL_AMBIENT_AND_DIFFUSE:
+    case GL_BLEND_COLOR:
         s =  4;
         break;
     case GL_MODELVIEW_MATRIX:
@@ -317,9 +350,12 @@ int glUtilsPixelBitSize(GLenum format, GLenum type)
     int componentsize = 0;
     int pixelsize = 0;
     switch(type) {
+    case GL_BYTE:
     case GL_UNSIGNED_BYTE:
         componentsize = 8;
         break;
+    case GL_SHORT:
+    case GL_UNSIGNED_SHORT:
     case GL_UNSIGNED_SHORT_5_6_5:
     case GL_UNSIGNED_SHORT_4_4_4_4:
     case GL_UNSIGNED_SHORT_5_5_5_1:
@@ -327,6 +363,13 @@ int glUtilsPixelBitSize(GLenum format, GLenum type)
     case GL_RGB5_A1_OES:
     case GL_RGBA4_OES:
         pixelsize = 16;
+        break;
+    case GL_INT:
+    case GL_UNSIGNED_INT:
+    case GL_FLOAT:
+    case GL_FIXED:
+    case GL_UNSIGNED_INT_24_8_OES:
+        pixelsize = 32;
         break;
     default:
         ERR("glUtilsPixelBitSize: unknown pixel type - assuming pixel data 0\n");
@@ -342,6 +385,8 @@ int glUtilsPixelBitSize(GLenum format, GLenum type)
 #endif
         case GL_ALPHA:
         case GL_LUMINANCE:
+        case GL_DEPTH_COMPONENT:
+        case GL_DEPTH_STENCIL_OES:
             components = 1;
             break;
         case GL_LUMINANCE_ALPHA:
@@ -373,13 +418,15 @@ void glUtilsPackStrings(char *ptr,  char **strings,  GLint *length, GLsizei coun
     char *p = ptr;
     *p = '\0';
     for (int i = 0; i < count; i++) {
-        int l;
-        if (length == NULL || length[i] < 0) {
-            l = strlen(strings[i]);
-            strcat(p, strings[i]);
-        } else {
-            l = length[i];
-            strncat(p, strings[i], l);
+        int l=0;
+        if (strings[i]!=NULL) {
+            if (length == NULL || length[i] < 0) {
+                l = strlen(strings[i]);
+                strcat(p, strings[i]);
+            } else {
+                l = length[i];
+                strncat(p, strings[i], l);
+            }
         }
         p += l;
     }
@@ -392,7 +439,7 @@ int glUtilsCalcShaderSourceLen( char **strings,  GLint *length, GLsizei count)
     for (int i = 0; i < count; i++) {
         int l;
         if (length == NULL || length[i] < 0) {
-            l = strlen(strings[i]);
+            l = strings[i]!=NULL ? strlen(strings[i]) : 0;
         } else {
             l = length[i];
         }

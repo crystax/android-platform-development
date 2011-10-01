@@ -21,19 +21,19 @@
 #include "GL2Dispatch.h"
 #include "ThreadInfo.h"
 #include <stdio.h>
+#include "TimeUtils.h"
 
 FrameBuffer *FrameBuffer::s_theFrameBuffer = NULL;
 HandleType FrameBuffer::s_nextHandle = 0;
 
 #ifdef WITH_GLES2
-static const char *getGLES2ExtensionString(EGLDisplay p_dpy,
-                                 EGLNativeWindowType p_window)
+static const char *getGLES2ExtensionString(EGLDisplay p_dpy)
 {
     EGLConfig config;
     EGLSurface surface;
 
     GLint configAttribs[] = {
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT | EGL_PBUFFER_BIT,
         EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
         EGL_NONE
     };
@@ -44,9 +44,13 @@ static const char *getGLES2ExtensionString(EGLDisplay p_dpy,
         return NULL;
     }
 
-    surface = s_egl.eglCreateWindowSurface(p_dpy, config,
-                                              p_window,
-                                              NULL);
+    EGLint pbufAttribs[] = {
+        EGL_WIDTH, 1,
+        EGL_HEIGHT, 1,
+        EGL_NONE
+    };
+
+    surface = s_egl.eglCreatePbufferSurface(p_dpy, config, pbufAttribs);
     if (surface == EGL_NO_SURFACE) {
         return NULL;
     }
@@ -85,44 +89,28 @@ static const char *getGLES2ExtensionString(EGLDisplay p_dpy,
 
 void FrameBuffer::finalize(){
     if(s_theFrameBuffer){
+        s_theFrameBuffer->removeSubWindow();
+        s_theFrameBuffer->m_colorbuffers.clear();
+        s_theFrameBuffer->m_windows.clear();
+        s_theFrameBuffer->m_contexts.clear();
         s_egl.eglMakeCurrent(s_theFrameBuffer->m_eglDisplay, NULL, NULL, NULL);
-        s_egl.eglDestroySurface(s_theFrameBuffer->m_eglDisplay,s_theFrameBuffer->m_eglSurface);
         s_egl.eglDestroyContext(s_theFrameBuffer->m_eglDisplay,s_theFrameBuffer->m_eglContext);
-        delete s_theFrameBuffer;
+        s_egl.eglDestroyContext(s_theFrameBuffer->m_eglDisplay,s_theFrameBuffer->m_pbufContext);
+        s_egl.eglDestroySurface(s_theFrameBuffer->m_eglDisplay,s_theFrameBuffer->m_pbufSurface);
         s_theFrameBuffer = NULL;
     }
 }
 
-bool FrameBuffer::initialize(FBNativeWindowType p_window,
-                             int p_x, int p_y,
-                             int p_width, int p_height)
+bool FrameBuffer::initialize(int width, int height)
 {
     if (s_theFrameBuffer != NULL) {
         return true;
     }
 
     //
-    // Load EGL Plugin
-    //
-    if (!init_egl_dispatch()) {
-        // Failed to load EGL
-        printf("Failed to init_egl_dispatch\n");
-        return false;
-    }
-
-    //
-    // Load GLES Plugin
-    //
-    if (!init_gl_dispatch()) {
-        // Failed to load GLES
-        ERR("Failed to init_gl_dispatch\n");
-        return false;
-    }
-
-    //
     // allocate space for the FrameBuffer object
     //
-    FrameBuffer *fb = new FrameBuffer(p_x, p_y, p_width, p_height);
+    FrameBuffer *fb = new FrameBuffer(width, height);
     if (!fb) {
         ERR("Failed to create fb\n");
         return false;
@@ -136,7 +124,7 @@ bool FrameBuffer::initialize(FBNativeWindowType p_window,
         fb->m_caps.hasGL2 = false;
     }
     else {
-        fb->m_caps.hasGL2 = init_gl2_dispatch();
+        fb->m_caps.hasGL2 = s_gl2_enabled;
     }
 #else
     fb->m_caps.hasGL2 = false;
@@ -161,10 +149,6 @@ bool FrameBuffer::initialize(FBNativeWindowType p_window,
     DBG("egl: %d %d\n", fb->m_caps.eglMajor, fb->m_caps.eglMinor);
     s_egl.eglBindAPI(EGL_OPENGL_ES_API);
 
-    fb->m_nativeWindow = p_window;
-
-    fb->m_subWin = createSubWindow(p_window,&fb->m_subWinDisplay,p_x,p_y,p_width,p_height);
-
     //
     // if GLES2 plugin has loaded - try to make GLES2 context and
     // get GLES2 extension string
@@ -172,7 +156,7 @@ bool FrameBuffer::initialize(FBNativeWindowType p_window,
     const char *gl2Extensions = NULL;
 #ifdef WITH_GLES2
     if (fb->m_caps.hasGL2) {
-        gl2Extensions = getGLES2ExtensionString(fb->m_eglDisplay, fb->m_subWin);
+        gl2Extensions = getGLES2ExtensionString(fb->m_eglDisplay);
         if (!gl2Extensions) {
             // Could not create GLES2 context - drop GL2 capability
             fb->m_caps.hasGL2 = false;
@@ -181,8 +165,7 @@ bool FrameBuffer::initialize(FBNativeWindowType p_window,
 #endif
 
     //
-    // Create EGL context and Surface attached to the native window, for
-    // framebuffer post rendering.
+    // Create EGL context for framebuffer post rendering.
     //
 #if 0
     GLint configAttribs[] = {
@@ -195,25 +178,15 @@ bool FrameBuffer::initialize(FBNativeWindowType p_window,
         EGL_RED_SIZE, 1,
         EGL_GREEN_SIZE, 1,
         EGL_BLUE_SIZE, 1,
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT | EGL_PBUFFER_BIT,
         EGL_NONE
     };
 #endif
-    EGLConfig eglConfig;
+
     int n;
     if (!s_egl.eglChooseConfig(fb->m_eglDisplay, configAttribs,
-                               &eglConfig, 1, &n)) {
+                               &fb->m_eglConfig, 1, &n)) {
         ERR("Failed on eglChooseConfig\n");
-        delete fb;
-        return false;
-    }
-
-    EGLNativeDisplayType dpy;
-    fb->m_eglSurface = s_egl.eglCreateWindowSurface(fb->m_eglDisplay, eglConfig,
-                                                  fb->m_subWin,
-                                                  NULL);
-    if (fb->m_eglSurface == EGL_NO_SURFACE) {
-        ERR("Failed to create surface\n");
         delete fb;
         return false;
     }
@@ -223,11 +196,48 @@ bool FrameBuffer::initialize(FBNativeWindowType p_window,
         EGL_NONE
     };
 
-    fb->m_eglContext = s_egl.eglCreateContext(fb->m_eglDisplay, eglConfig,
+    fb->m_eglContext = s_egl.eglCreateContext(fb->m_eglDisplay, fb->m_eglConfig,
                                               EGL_NO_CONTEXT,
                                               glContextAttribs);
     if (fb->m_eglContext == EGL_NO_CONTEXT) {
         printf("Failed to create Context 0x%x\n", s_egl.eglGetError());
+        delete fb;
+        return false;
+    }
+
+    //
+    // Create another context which shares with the eglContext to be used
+    // when we bind the pbuffer. That prevent switching drawable binding
+    // back and forth on framebuffer context.
+    // The main purpose of it is to solve a "blanking" behaviour we see on
+    // on Mac platform when switching binded drawable for a context however
+    // it is more efficient on other platforms as well.
+    //
+    fb->m_pbufContext = s_egl.eglCreateContext(fb->m_eglDisplay, fb->m_eglConfig,
+                                               fb->m_eglContext,
+                                               glContextAttribs);
+    if (fb->m_pbufContext == EGL_NO_CONTEXT) {
+        printf("Failed to create Pbuffer Context 0x%x\n", s_egl.eglGetError());
+        delete fb;
+        return false;
+    }
+
+    //
+    // create a 1x1 pbuffer surface which will be used for binding
+    // the FB context.
+    // The FB output will go to a subwindow, if one exist.
+    //
+    EGLint pbufAttribs[] = {
+        EGL_WIDTH, 1,
+        EGL_HEIGHT, 1,
+        EGL_NONE
+    };
+
+    fb->m_pbufSurface = s_egl.eglCreatePbufferSurface(fb->m_eglDisplay,
+                                                  fb->m_eglConfig,
+                                                  pbufAttribs);
+    if (fb->m_pbufSurface == EGL_NO_SURFACE) {
+        printf("Failed to create pbuf surface for FB 0x%x\n", s_egl.eglGetError());
         delete fb;
         return false;
     }
@@ -264,6 +274,18 @@ bool FrameBuffer::initialize(FBNativeWindowType p_window,
     else {
         fb->m_caps.has_eglimage_texture_2d = false;
         fb->m_caps.has_eglimage_renderbuffer = false;
+    }
+
+    //
+    // Fail initialization if not all of the following extensions
+    // exist:
+    //     EGL_KHR_gl_texture_2d_image
+    //     GL_OES_EGL_IMAGE (by both GLES implementations [1 and 2])
+    //
+    if (!fb->m_caps.has_eglimage_texture_2d) {
+        ERR("Failed: Missing egl_image related extension(s)\n");
+        delete fb;
+        return false;
     }
 
     //
@@ -308,20 +330,9 @@ bool FrameBuffer::initialize(FBNativeWindowType p_window,
     }
 
     //
-    // update Pbuffer bind to texture capability based on configs
+    // Initialize some GL state in the pbuffer context
     //
-    fb->m_caps.has_BindToTexture =
-        (configStatus == INIT_CONFIG_HAS_BIND_TO_TEXTURE);
-
-
-    //
-    // Initialize some GL state
-    //
-    s_gl.glMatrixMode(GL_PROJECTION);
-    s_gl.glLoadIdentity();
-    s_gl.glOrthof(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
-    s_gl.glMatrixMode(GL_MODELVIEW);
-    s_gl.glLoadIdentity();
+    fb->initGLState();
 
     // release the FB context
     fb->unbind_locked();
@@ -333,24 +344,97 @@ bool FrameBuffer::initialize(FBNativeWindowType p_window,
     return true;
 }
 
-FrameBuffer::FrameBuffer(int p_x, int p_y, int p_width, int p_height) :
-    m_x(p_x),
-    m_y(p_y),
+FrameBuffer::FrameBuffer(int p_width, int p_height) :
     m_width(p_width),
     m_height(p_height),
     m_eglDisplay(EGL_NO_DISPLAY),
     m_eglSurface(EGL_NO_SURFACE),
     m_eglContext(EGL_NO_CONTEXT),
+    m_pbufContext(EGL_NO_CONTEXT),
     m_prevContext(EGL_NO_CONTEXT),
     m_prevReadSurf(EGL_NO_SURFACE),
     m_prevDrawSurf(EGL_NO_SURFACE),
     m_subWin(NULL),
-    m_subWinDisplay(NULL)
+    m_subWinDisplay(NULL),
+    m_lastPostedColorBuffer(0),
+    m_zRot(0.0f),
+    m_eglContextInitialized(false),
+    m_statsNumFrames(0),
+    m_statsStartTime(0LL)
 {
+    m_fpsStats = getenv("SHOW_FPS_STATS") != NULL;
 }
 
 FrameBuffer::~FrameBuffer()
 {
+}
+
+bool FrameBuffer::setupSubWindow(FBNativeWindowType p_window,
+                                  int p_x, int p_y,
+                                  int p_width, int p_height, float zRot)
+{
+    bool success = false;
+
+    if (s_theFrameBuffer) {
+        s_theFrameBuffer->m_lock.lock();
+        FrameBuffer *fb = s_theFrameBuffer;
+        if (!fb->m_subWin) {
+
+            // create native subwindow for FB display output
+            fb->m_subWin = createSubWindow(p_window,
+                                           &fb->m_subWinDisplay,
+                                           p_x,p_y,p_width,p_height);
+            if (fb->m_subWin) {
+                fb->m_nativeWindow = p_window;
+
+                // create EGLSurface from the generated subwindow
+                fb->m_eglSurface = s_egl.eglCreateWindowSurface(fb->m_eglDisplay, 
+                                                    fb->m_eglConfig,
+                                                    fb->m_subWin,
+                                                    NULL);
+
+                if (fb->m_eglSurface == EGL_NO_SURFACE) {
+                    ERR("Failed to create surface\n");
+                    destroySubWindow(fb->m_subWinDisplay, fb->m_subWin);
+                    fb->m_subWin = NULL;
+                }
+                else if (fb->bindSubwin_locked()) {
+                    // Subwin creation was successfull,
+                    // update viewport and z rotation and draw
+                    // the last posted color buffer.
+                    s_gl.glViewport(0, 0, p_width, p_height);
+                    fb->m_zRot = zRot;
+                    fb->post( fb->m_lastPostedColorBuffer, false );
+                    fb->unbind_locked();
+                    success = true;
+                }
+             }
+        }
+        s_theFrameBuffer->m_lock.unlock();
+     }
+
+    return success;
+}
+
+bool FrameBuffer::removeSubWindow()
+{
+    bool removed = false;
+    if (s_theFrameBuffer) {
+        s_theFrameBuffer->m_lock.lock();
+        if (s_theFrameBuffer->m_subWin) {
+            s_egl.eglMakeCurrent(s_theFrameBuffer->m_eglDisplay, NULL, NULL, NULL);
+            s_egl.eglDestroySurface(s_theFrameBuffer->m_eglDisplay,
+                                    s_theFrameBuffer->m_eglSurface);
+            destroySubWindow(s_theFrameBuffer->m_subWinDisplay,
+                             s_theFrameBuffer->m_subWin);
+
+            s_theFrameBuffer->m_eglSurface = EGL_NO_SURFACE;
+            s_theFrameBuffer->m_subWin = NULL;
+            removed = true;
+        }
+        s_theFrameBuffer->m_lock.unlock();
+    }
+    return removed;
 }
 
 HandleType FrameBuffer::genHandle()
@@ -501,6 +585,19 @@ bool FrameBuffer::bindColorBufferToTexture(HandleType p_colorbuffer)
     return (*c).second->bindToTexture();
 }
 
+bool FrameBuffer::bindColorBufferToRenderbuffer(HandleType p_colorbuffer)
+{
+    android::Mutex::Autolock mutex(m_lock);
+
+    ColorBufferMap::iterator c( m_colorbuffers.find(p_colorbuffer) );
+    if (c == m_colorbuffers.end()) {
+        // bad colorbuffer handle
+        return false;
+    }
+
+    return (*c).second->bindToRenderbuffer();
+}
+
 bool FrameBuffer::bindContext(HandleType p_context,
                               HandleType p_drawSurface,
                               HandleType p_readSurface)
@@ -596,10 +693,36 @@ bool FrameBuffer::bind_locked()
     EGLSurface prevReadSurf = s_egl.eglGetCurrentSurface(EGL_READ);
     EGLSurface prevDrawSurf = s_egl.eglGetCurrentSurface(EGL_DRAW);
 
+    if (!s_egl.eglMakeCurrent(m_eglDisplay, m_pbufSurface,
+                              m_pbufSurface, m_pbufContext)) {
+        ERR("eglMakeCurrent failed\n");
+        return false;
+    }
+
+    m_prevContext = prevContext;
+    m_prevReadSurf = prevReadSurf;
+    m_prevDrawSurf = prevDrawSurf;
+    return true;
+}
+
+bool FrameBuffer::bindSubwin_locked()
+{
+    EGLContext prevContext = s_egl.eglGetCurrentContext();
+    EGLSurface prevReadSurf = s_egl.eglGetCurrentSurface(EGL_READ);
+    EGLSurface prevDrawSurf = s_egl.eglGetCurrentSurface(EGL_DRAW);
+
     if (!s_egl.eglMakeCurrent(m_eglDisplay, m_eglSurface,
                               m_eglSurface, m_eglContext)) {
         ERR("eglMakeCurrent failed\n");
         return false;
+    }
+
+    //
+    // initialize GL state in eglContext if not yet initilaized
+    //
+    if (!m_eglContextInitialized) {
+        initGLState();
+        m_eglContextInitialized = true;
     }
 
     m_prevContext = prevContext;
@@ -621,22 +744,81 @@ bool FrameBuffer::unbind_locked()
     return true;
 }
 
-bool FrameBuffer::post(HandleType p_colorbuffer)
+bool FrameBuffer::post(HandleType p_colorbuffer, bool needLock)
 {
-    android::Mutex::Autolock mutex(m_lock);
+    if (needLock) m_lock.lock();
     bool ret = false;
 
     ColorBufferMap::iterator c( m_colorbuffers.find(p_colorbuffer) );
     if (c != m_colorbuffers.end()) {
-        if (!bind_locked()) {
+
+        m_lastPostedColorBuffer = p_colorbuffer;
+        if (!m_subWin) {
+            // no subwindow created for the FB output
+            // cannot post the colorbuffer
+            if (needLock) m_lock.unlock();
+            return ret;
+        }
+
+
+        // bind the subwindow eglSurface
+        if (!bindSubwin_locked()) {
+            ERR("FrameBuffer::post eglMakeCurrent failed\n");
+            if (needLock) m_lock.unlock();
             return false;
         }
+
+        //
+        // render the color buffer to the window
+        //
+        s_gl.glPushMatrix();
+        s_gl.glRotatef(m_zRot, 0.0f, 0.0f, 1.0f);
+        if (m_zRot != 0.0f) {
+            s_gl.glClear(GL_COLOR_BUFFER_BIT);
+        }
         ret = (*c).second->post();
+        s_gl.glPopMatrix();
+
         if (ret) {
+
+            //
+            // output FPS statistics
+            //
+            if (m_fpsStats) {
+                long long currTime = GetCurrentTimeMS();
+                m_statsNumFrames++;
+                if (currTime - m_statsStartTime >= 1000) {
+                    float dt = (float)(currTime - m_statsStartTime) / 1000.0f;
+                    printf("FPS: %5.3f\n", (float)m_statsNumFrames / dt);
+                    m_statsStartTime = currTime;
+                    m_statsNumFrames = 0;
+                }
+            }
+
             s_egl.eglSwapBuffers(m_eglDisplay, m_eglSurface);
         }
+ 
+        // restore previous binding
         unbind_locked();
     }
 
+    if (needLock) m_lock.unlock();
     return ret;
+}
+
+bool FrameBuffer::repost()
+{
+    if (m_lastPostedColorBuffer) {
+        return post( m_lastPostedColorBuffer );
+    }
+    return false;
+}
+
+void FrameBuffer::initGLState()
+{
+    s_gl.glMatrixMode(GL_PROJECTION);
+    s_gl.glLoadIdentity();
+    s_gl.glOrthof(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+    s_gl.glMatrixMode(GL_MODELVIEW);
+    s_gl.glLoadIdentity();
 }

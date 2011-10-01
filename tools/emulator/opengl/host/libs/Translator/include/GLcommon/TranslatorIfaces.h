@@ -15,9 +15,9 @@
 */
 #ifndef TRANSLATOR_IFACES_H
 #define TRANSLATOR_IFACES_H
-#include <GLcommon/ThreadInfo.h>
 #include <GLES/gl.h>
 #include <string.h>
+#include "objectNameManager.h"
 
 extern "C" {
 
@@ -45,7 +45,8 @@ public:
                     sourceEGLImage(0),
                     wasBound(false),
                     requiresAutoMipmap(false),
-                    target(0) {
+                    target(0),
+                    oldGlobal(0) {
         memset(crop_rect,0,4*sizeof(int));
     };
 
@@ -59,6 +60,7 @@ public:
     int          crop_rect[4];
     void (*eglImageDetach)(unsigned int imageId);
     GLenum target;
+    GLuint oldGlobal;
 };
 
 struct EglImage
@@ -89,7 +91,7 @@ typedef struct {
 
 
 typedef struct {
-    ThreadInfo* (*getThreadInfo)();
+    GLEScontext* (*getGLESContext)();
     EglImage* (*eglAttachEGLImage)(unsigned int imageId);
     void        (*eglDetachEGLImage)(unsigned int imageId);
 }EGLiface;

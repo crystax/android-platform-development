@@ -37,7 +37,7 @@ static GL_FUNC_PTR getGLFuncAddress(const char *funcName) {
     static osUtils::dynLibrary* libGL = osUtils::dynLibrary::open("opengl32");
     ret = (GL_FUNC_PTR)wglGetProcAddress(funcName);
 #elif defined(__APPLE__)
-    static osUtils::dynLibrary* libGL = osUtils::dynLibrary::open("libGL.dylib");
+    static osUtils::dynLibrary* libGL = osUtils::dynLibrary::open("/System/Library/Frameworks/OpenGL.framework/OpenGL");
 #endif
     if(!ret && libGL){
         ret = libGL->findSymbol(funcName);
@@ -108,6 +108,7 @@ void (GLAPIENTRY *GLDispatch::glGetIntegerv)(GLenum,GLint *) = NULL;
 const GLubyte * (GLAPIENTRY *GLDispatch::glGetString) (GLenum) = NULL;
 void (GLAPIENTRY *GLDispatch::glGetTexParameterfv)(GLenum,GLenum,GLfloat *) = NULL;
 void (GLAPIENTRY *GLDispatch::glGetTexParameteriv)(GLenum,GLenum,GLint *) = NULL;
+void (GLAPIENTRY *GLDispatch::glGetTexLevelParameteriv) (GLenum target, GLint level, GLenum pname, GLint *params) = NULL;
 void (GLAPIENTRY *GLDispatch::glHint)(GLenum,GLenum) = NULL;
 GLboolean (GLAPIENTRY *GLDispatch::glIsBuffer)(GLuint) = NULL;
 GLboolean (GLAPIENTRY *GLDispatch::glIsEnabled)(GLenum) = NULL;
@@ -345,6 +346,7 @@ void GLDispatch::dispatchFuncs(GLESVersion version){
     LOAD_GL_FUNC(glTexParameterfv);
     LOAD_GL_FUNC(glGetTexParameterfv);
     LOAD_GL_FUNC(glGetTexParameteriv);
+    LOAD_GL_FUNC(glGetTexLevelParameteriv);
     LOAD_GL_FUNC(glHint);
     LOAD_GL_FUNC(glIsBuffer);
     LOAD_GL_FUNC(glIsEnabled);
