@@ -68,6 +68,7 @@ typedef union {
 	char __mbstate8[128];
 	__int64_t __mbstateL;			/* for alignment */
 } __mbstate_t;
+#define _GLIBCXX_HAVE_MBSTATE_T 1
 
 /* BIONIC: if we're using non-cleaned up user-level kernel headers, 
  *         this will prevent many type declaration conflicts

@@ -1,6 +1,9 @@
-/*
- * Copyright (c) 1991, 1993
+/*-
+ * Copyright (c) 1993
  *	The Regents of the University of California.  All rights reserved.
+ *
+ * This code is derived from software contributed to Berkeley by
+ * Paul Borman at Krystal Technologies.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,55 +33,65 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *	@(#)locale.h	8.1 (Berkeley) 6/2/93
+ *	@(#)runetype.h	8.1 (Berkeley) 6/2/93
  * $FreeBSD$
  */
 
-#ifndef _LOCALE_H_
-#define _LOCALE_H_
-
-struct lconv {
-	char	*decimal_point;
-	char	*thousands_sep;
-	char	*grouping;
-	char	*int_curr_symbol;
-	char	*currency_symbol;
-	char	*mon_decimal_point;
-	char	*mon_thousands_sep;
-	char	*mon_grouping;
-	char	*positive_sign;
-	char	*negative_sign;
-	char	int_frac_digits;
-	char	frac_digits;
-	char	p_cs_precedes;
-	char	p_sep_by_space;
-	char	n_cs_precedes;
-	char	n_sep_by_space;
-	char	p_sign_posn;
-	char	n_sign_posn;
-	char	int_p_cs_precedes;
-	char	int_n_cs_precedes;
-	char	int_p_sep_by_space;
-	char	int_n_sep_by_space;
-	char	int_p_sign_posn;
-	char	int_n_sign_posn;
-};
-
-#define	LC_ALL		0
-#define	LC_COLLATE	1
-#define	LC_CTYPE	2
-#define	LC_MONETARY	3
-#define	LC_NUMERIC	4
-#define	LC_TIME		5
-#define	LC_MESSAGES	6
-
-#define	_LC_LAST	7		/* marks end */
+#ifndef	_RUNETYPE_H_
+#define	_RUNETYPE_H_
 
 #include <sys/cdefs.h>
+#include <sys/types.h>
+#ifdef ANDROID
+#include <stddef.h>
+#endif
 
-__BEGIN_DECLS
-struct lconv	*localeconv(void);
-char		*setlocale(int, const char *);
-__END_DECLS
+#define	_CACHED_RUNES	(1 <<8 )	/* Must be a power of 2 */
+#define	_CRMASK		(~(_CACHED_RUNES - 1))
 
-#endif /* _LOCALE_H_ */
+/*
+ * The lower 8 bits of runetype[] contain the digit value of the rune.
+ */
+typedef struct {
+	__rune_t	__min;		/* First rune of the range */
+	__rune_t	__max;		/* Last rune (inclusive) of the range */
+	__rune_t	__map;		/* What first maps to in maps */
+	unsigned long	*__types;	/* Array of types in range */
+} _RuneEntry;
+
+typedef struct {
+	int		__nranges;	/* Number of ranges stored */
+	_RuneEntry	*__ranges;	/* Pointer to the ranges */
+} _RuneRange;
+
+typedef struct {
+	char		__magic[8];	/* Magic saying what version we are */
+	char		__encoding[32];	/* ASCII name of this encoding */
+
+	__rune_t	(*__sgetrune)(const char *, size_t, char const **);
+	int		(*__sputrune)(__rune_t, char *, size_t, char **);
+	__rune_t	__invalid_rune;
+
+	unsigned long	__runetype[_CACHED_RUNES];
+	__rune_t	__maplower[_CACHED_RUNES];
+	__rune_t	__mapupper[_CACHED_RUNES];
+
+	/*
+	 * The following are to deal with Runes larger than _CACHED_RUNES - 1.
+	 * Their data is actually contiguous with this structure so as to make
+	 * it easier to read/write from/to disk.
+	 */
+	_RuneRange	__runetype_ext;
+	_RuneRange	__maplower_ext;
+	_RuneRange	__mapupper_ext;
+
+	void		*__variable;	/* Data which depends on the encoding */
+	int		__variable_len;	/* how long that data is */
+} _RuneLocale;
+
+#define	_RUNE_MAGIC_1	"RuneMagi"	/* Indicates version 0 of RuneLocale */
+
+extern _RuneLocale _DefaultRuneLocale;
+extern _RuneLocale *_CurrentRuneLocale;
+
+#endif	/* !_RUNETYPE_H_ */
