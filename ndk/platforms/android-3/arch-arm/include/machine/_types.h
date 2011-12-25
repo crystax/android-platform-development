@@ -39,10 +39,12 @@
 #if !defined(__ARM_EABI__)
 /* the kernel defines size_t as unsigned int, but g++ wants it to be unsigned long */
 #define _SIZE_T
+#define _SIZE_T_DEFINED_
 #define _SSIZE_T
+#define _SSIZE_T_DEFINED_
 #define _PTRDIFF_T
 typedef unsigned long  size_t;
-typedef long           ssize_t;
+typedef long int       ssize_t;
 typedef long           ptrdiff_t;
 #endif
 

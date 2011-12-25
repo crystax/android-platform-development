@@ -87,7 +87,7 @@ typedef  .... pthread_t;
 
 #ifndef _SIZE_T_DEFINED_
 #define _SIZE_T_DEFINED_
-typedef unsigned int  size_t;
+typedef unsigned long  size_t;
 #endif
 
 /* size_t is defined by the GCC-specific <stddef.h> */
