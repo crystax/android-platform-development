@@ -1,10 +1,25 @@
+/*
+* Copyright 2011 The Android Open Source Project
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+* http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
 #include "EGLClientIface.h"
 #include "HostConnection.h"
 #include "GLEncoder.h"
 #include "GLES/gl.h"
 #include "GLES/glext.h"
 #include "ErrorLog.h"
-#include <private/ui/android_natives_priv.h>
 #include "gralloc_cb.h"
 #include "ThreadInfo.h"
 
@@ -23,12 +38,12 @@ static EGLClient_glesInterface * s_gl = NULL;
 #define DEFINE_AND_VALIDATE_HOST_CONNECTION(ret) \
     HostConnection *hostCon = HostConnection::get(); \
     if (!hostCon) { \
-        LOGE("egl: Failed to get host connection\n"); \
+        ALOGE("egl: Failed to get host connection\n"); \
         return ret; \
     } \
     renderControl_encoder_context_t *rcEnc = hostCon->rcEncoder(); \
     if (!rcEnc) { \
-        LOGE("egl: Failed to get renderControl encoder context\n"); \
+        ALOGE("egl: Failed to get renderControl encoder context\n"); \
         return ret; \
     }
 
@@ -73,13 +88,9 @@ void glEGLImageTargetRenderbufferStorageOES(void *self, GLenum target, GLeglImag
         return;
     }
 
-    GET_CONTEXT;
     DEFINE_AND_VALIDATE_HOST_CONNECTION();
-
-    ctx->override2DTextureTarget(target);
     rcEnc->rcBindRenderbuffer(rcEnc,
             ((cb_handle_t *)(native_buffer->handle))->hostHandle);
-    ctx->restore2DTextureTarget();
 
     return;
 }

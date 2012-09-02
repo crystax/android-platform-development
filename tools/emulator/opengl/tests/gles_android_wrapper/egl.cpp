@@ -58,7 +58,7 @@ int initApi(const char *driverLibName, const char *implLibName, T **dispatchTabl
 {
     void *driverLib = dlopen(driverLibName, RTLD_NOW | RTLD_LOCAL);
     if (driverLib == NULL) {
-        LOGE("failed to load %s : %s\n", driverLibName, dlerror());
+        ALOGE("failed to load %s : %s\n", driverLibName, dlerror());
         return -1;
     }
 
@@ -66,13 +66,13 @@ int initApi(const char *driverLibName, const char *implLibName, T **dispatchTabl
     createFcn_t createFcn;
     createFcn = (createFcn_t) dlsym(driverLib, "createFromLib");
     if (createFcn == NULL) {
-        LOGE("failed to load createFromLib constructor function\n");
+        ALOGE("failed to load createFromLib constructor function\n");
         return -1;
     }
 
     void *implLib = dlopen(implLibName, RTLD_NOW | RTLD_LOCAL);
     if (implLib == NULL) {
-        LOGE("couldn't open %s", implLibName);
+        ALOGE("couldn't open %s", implLibName);
         return -2;
     }
     *dispatchTable = createFcn(implLib, accessor);
@@ -85,7 +85,7 @@ int initApi(const char *driverLibName, const char *implLibName, T **dispatchTabl
 
     // XXX - we do not dlclose the driver library, so its not initialized when
     // later loaded by android - is this required?
-    LOGD("loading %s into %s complete\n", implLibName, driverLibName);
+    ALOGD("loading %s into %s complete\n", implLibName, driverLibName);
     return 0;
 
 }
@@ -112,20 +112,20 @@ const char *getProcName()
             // we need to obtain our process name from the command line;
             FILE *fp = fopen("/proc/self/cmdline", "rt");
             if (fp == NULL) {
-                LOGE("couldn't open /proc/self/cmdline\n");
+                ALOGE("couldn't open /proc/self/cmdline\n");
                 return NULL;
             }
 
             char line[1000];
             if (fgets(line, sizeof(line), fp) == NULL) {
-                LOGE("couldn't read the self cmdline from \n");
+                ALOGE("couldn't read the self cmdline from \n");
                 fclose(fp);
                 return NULL;
             }
             fclose(fp);
 
             if (line[0] == '\0') {
-                LOGE("cmdline is empty\n");
+                ALOGE("cmdline is empty\n");
                 return NULL;
             }
 
@@ -155,11 +155,11 @@ bool isNeedEncode()
 {
     const char *procname = getProcName();
     if (procname == NULL) return false;
-    LOGD("isNeedEncode? for %s\n", procname);
+    ALOGD("isNeedEncode? for %s\n", procname);
     // check on our whitelist
     FILE *fp = fopen(GLES_EMUL_TARGETS_FILE, "rt");
     if (fp == NULL) {
-        LOGE("couldn't open %s\n", GLES_EMUL_TARGETS_FILE);
+        ALOGE("couldn't open %s\n", GLES_EMUL_TARGETS_FILE);
         return false;
     }
 
@@ -173,7 +173,7 @@ bool isNeedEncode()
             char c = line[procnameLen];
             if (c == '\0' || c == ' ' || c == '\t' || c == '\n') {
                 found = true;
-                LOGD("should use encoder for %s\n", procname);
+                ALOGD("should use encoder for %s\n", procname);
                 break;
             }
         }
@@ -187,7 +187,7 @@ void initDispatchTables()
     //
     // Load our back-end implementation of EGL/GLES
     //
-    LOGD("Loading egl dispatch for %s\n", getProcName());
+    ALOGD("Loading egl dispatch for %s\n", getProcName());
 
     void *gles_android = dlopen("/system/lib/egl/libGLES_android.so", RTLD_NOW | RTLD_LOCAL);
     if (!gles_android) {
@@ -213,7 +213,7 @@ void initDispatchTables()
         // initialize a connection to the server, and the GLESv1/v2 encoders;
         ServerConnection * connection = ServerConnection::s_getServerConnection();
         if (connection == NULL) {
-            LOGE("couldn't create server connection\n");
+            ALOGE("couldn't create server connection\n");
             s_needEncode = false;
         }
     }
@@ -231,7 +231,7 @@ void initDispatchTables()
     }
 
     if (!s_needEncode) {
-        LOGD("Initializing native opengl for %s\n", getProcName());
+        ALOGD("Initializing native opengl for %s\n", getProcName());
         initApi<gl_wrapper_context_t>(GLESv1_DRIVER, GLES_android_LIB, &g_gl_dispatch, getGLContext);
         // try to initialize gl2 from GLES, though its probably going to fail
         initApi<gl2_wrapper_context_t>(GLESv2_DRIVER, GLES_android_LIB, &g_gl2_dispatch, getGL2Context);
@@ -313,7 +313,7 @@ static EGLint * filter_es2_bit(const EGLint *attrib_list, bool *isES2)
             if (attribs[i + 1] & EGL_OPENGL_ES2_BIT) {
                 attribs[i + 1] &= ~EGL_OPENGL_ES2_BIT;
                 attribs[i + 1] |= EGL_OPENGL_ES_BIT;
-                LOGD("removing ES2 bit 0x%x\n", attribs[i + 1]);
+                ALOGD("removing ES2 bit 0x%x\n", attribs[i + 1]);
                 if (isES2 != NULL) *isES2 = true;
             }
         }
@@ -331,11 +331,11 @@ EGLBoolean eglChooseConfig(EGLDisplay dpy, const EGLint *attrib_list, EGLConfig 
                                               configs,
                                               config_size,
                                               num_config);
-        LOGD("eglChooseConfig: %d configs found\n", *num_config);
+        ALOGD("eglChooseConfig: %d configs found\n", *num_config);
         if (*num_config == 0 && attribs != NULL) {
-            LOGD("requested attributes:\n");
+            ALOGD("requested attributes:\n");
             for (int i = 0; attribs[i] != EGL_NONE; i++) {
-                LOGD("%d: 0x%x\n", i, attribs[i]);
+                ALOGD("%d: 0x%x\n", i, attribs[i]);
             }
         }
 

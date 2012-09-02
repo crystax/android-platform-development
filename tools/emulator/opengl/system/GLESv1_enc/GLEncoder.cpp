@@ -16,7 +16,6 @@
 #include "GLEncoder.h"
 #include "glUtils.h"
 #include "FixedBuffer.h"
-#include <private/ui/android_natives_priv.h>
 #include <cutils/log.h>
 #include <assert.h>
 
@@ -30,14 +29,14 @@ static GLubyte *gVersionString= (GLubyte *) "OpenGL ES-CM 1.0";
 static GLubyte *gExtensionsString= (GLubyte *) ""; // no extensions at this point;
 
 #define SET_ERROR_IF(condition,err) if((condition)) {                            \
-        LOGE("%s:%s:%d GL error 0x%x\n", __FILE__, __FUNCTION__, __LINE__, err); \
+        ALOGE("%s:%s:%d GL error 0x%x\n", __FILE__, __FUNCTION__, __LINE__, err); \
         ctx->setError(err);                                    \
         return;                                                  \
     }
 
 
 #define RET_AND_SET_ERROR_IF(condition,err,ret) if((condition)) {                \
-        LOGE("%s:%s:%d GL error 0x%x\n", __FILE__, __FUNCTION__, __LINE__, err); \
+        ALOGE("%s:%s:%d GL error 0x%x\n", __FILE__, __FUNCTION__, __LINE__, err); \
         ctx->setError(err);                                    \
         return ret;                                              \
     }
@@ -258,7 +257,7 @@ void GLEncoder::s_glPixelStorei(void *self, GLenum param, GLint value)
 {
     GLEncoder *ctx = (GLEncoder *)self;
     ctx->m_glPixelStorei_enc(ctx, param, value);
-    LOG_ASSERT(ctx->m_state, "GLEncoder::s_glPixelStorei");
+    ALOG_ASSERT(ctx->m_state, "GLEncoder::s_glPixelStorei");
     ctx->m_state->setPixelStore(param, value);
 }
 
@@ -537,7 +536,7 @@ void GLEncoder::s_glDrawElements(void *self, GLenum mode, GLsizei count, GLenum 
     }
 
     if (!has_immediate_arrays && !has_indirect_arrays) {
-        LOGE("glDrawElements: no data bound to the command - ignoring\n");
+        ALOGE("glDrawElements: no data bound to the command - ignoring\n");
         return;
     }
 
@@ -580,7 +579,7 @@ void GLEncoder::s_glDrawElements(void *self, GLenum mode, GLsizei count, GLenum 
             }
             break;
         default:
-            LOGE("unsupported index buffer type %d\n", type);
+            ALOGE("unsupported index buffer type %d\n", type);
         }
         if (has_indirect_arrays || 1) {
             ctx->sendVertexData(minIndex, maxIndex - minIndex + 1);
@@ -588,12 +587,12 @@ void GLEncoder::s_glDrawElements(void *self, GLenum mode, GLsizei count, GLenum 
                                       count * glSizeof(type));
             // XXX - OPTIMIZATION (see the other else branch) should be implemented
             if(!has_indirect_arrays) {
-                //LOGD("unoptimized drawelements !!!\n");
+                //ALOGD("unoptimized drawelements !!!\n");
             }
         } else {
             // we are all direct arrays and immidate mode index array -
             // rebuild the arrays and the index array;
-            LOGE("glDrawElements: direct index & direct buffer data - will be implemented in later versions;\n");
+            ALOGE("glDrawElements: direct index & direct buffer data - will be implemented in later versions;\n");
         }
     }
 }
@@ -605,7 +604,7 @@ void GLEncoder::s_glActiveTexture(void* self, GLenum texture)
     GLenum err;
 
     if ((err = state->setActiveTextureUnit(texture)) != GL_NO_ERROR) {
-        LOGE("%s:%s:%d GL error %#x\n", __FILE__, __FUNCTION__, __LINE__, err);
+        ALOGE("%s:%s:%d GL error %#x\n", __FILE__, __FUNCTION__, __LINE__, err);
         ctx->setError(err);
         return;
     }
@@ -621,7 +620,7 @@ void GLEncoder::s_glBindTexture(void* self, GLenum target, GLuint texture)
 
     GLboolean firstUse;
     if ((err = state->bindTexture(target, texture, &firstUse)) != GL_NO_ERROR) {
-        LOGE("%s:%s:%d GL error %#x\n", __FILE__, __FUNCTION__, __LINE__, err);
+        ALOGE("%s:%s:%d GL error %#x\n", __FILE__, __FUNCTION__, __LINE__, err);
         ctx->setError(err);
         return;
     }
@@ -634,6 +633,7 @@ void GLEncoder::s_glBindTexture(void* self, GLenum target, GLuint texture)
     GLenum priorityTarget = state->getPriorityEnabledTarget(GL_TEXTURE_2D);
 
     if (target == GL_TEXTURE_EXTERNAL_OES && firstUse) {
+        // set TEXTURE_EXTERNAL_OES default states which differ from TEXTURE_2D
         ctx->m_glBindTexture_enc(ctx, GL_TEXTURE_2D, texture);
         ctx->m_glTexParameteri_enc(ctx, GL_TEXTURE_2D,
                 GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -735,12 +735,20 @@ void GLEncoder::s_glGetTexParameteriv(void* self,
     GLEncoder* ctx = (GLEncoder*)self;
     const GLClientState* state = ctx->m_state;
 
-    if (target == GL_TEXTURE_2D || target == GL_TEXTURE_EXTERNAL_OES) {
-        ctx->override2DTextureTarget(target);
-        ctx->m_glGetTexParameteriv_enc(ctx, GL_TEXTURE_2D, pname, params);
-        ctx->restore2DTextureTarget();
-    } else {
-        ctx->m_glGetTexParameteriv_enc(ctx, target, pname, params);
+    switch (pname) {
+    case GL_REQUIRED_TEXTURE_IMAGE_UNITS_OES:
+        *params = 1;
+        break;
+
+    default:
+        if (target == GL_TEXTURE_2D || target == GL_TEXTURE_EXTERNAL_OES) {
+            ctx->override2DTextureTarget(target);
+            ctx->m_glGetTexParameteriv_enc(ctx, GL_TEXTURE_2D, pname, params);
+            ctx->restore2DTextureTarget();
+        } else {
+            ctx->m_glGetTexParameteriv_enc(ctx, target, pname, params);
+        }
+        break;
     }
 }
 
@@ -759,11 +767,34 @@ void GLEncoder::s_glGetTexParameterxv(void* self,
     }
 }
 
+static bool isValidTextureExternalParam(GLenum pname, GLenum param)
+{
+    switch (pname) {
+    case GL_TEXTURE_MIN_FILTER:
+    case GL_TEXTURE_MAG_FILTER:
+        return param == GL_NEAREST || param == GL_LINEAR;
+
+    case GL_TEXTURE_WRAP_S:
+    case GL_TEXTURE_WRAP_T:
+        return param == GL_CLAMP_TO_EDGE;
+
+    case GL_GENERATE_MIPMAP:
+        return param == GL_FALSE;
+
+    default:
+        return true;
+    }
+}
+
 void GLEncoder::s_glTexParameterf(void* self,
         GLenum target, GLenum pname, GLfloat param)
 {
     GLEncoder* ctx = (GLEncoder*)self;
     const GLClientState* state = ctx->m_state;
+
+    SET_ERROR_IF((target == GL_TEXTURE_EXTERNAL_OES &&
+            !isValidTextureExternalParam(pname, (GLenum)param)),
+            GL_INVALID_ENUM);
 
     if (target == GL_TEXTURE_2D || target == GL_TEXTURE_EXTERNAL_OES) {
         ctx->override2DTextureTarget(target);
@@ -780,6 +811,10 @@ void GLEncoder::s_glTexParameterfv(void* self,
     GLEncoder* ctx = (GLEncoder*)self;
     const GLClientState* state = ctx->m_state;
 
+    SET_ERROR_IF((target == GL_TEXTURE_EXTERNAL_OES &&
+            !isValidTextureExternalParam(pname, (GLenum)params[0])),
+            GL_INVALID_ENUM);
+
     if (target == GL_TEXTURE_2D || target == GL_TEXTURE_EXTERNAL_OES) {
         ctx->override2DTextureTarget(target);
         ctx->m_glTexParameterfv_enc(ctx, GL_TEXTURE_2D, pname, params);
@@ -794,6 +829,10 @@ void GLEncoder::s_glTexParameteri(void* self,
 {
     GLEncoder* ctx = (GLEncoder*)self;
     const GLClientState* state = ctx->m_state;
+
+    SET_ERROR_IF((target == GL_TEXTURE_EXTERNAL_OES &&
+            !isValidTextureExternalParam(pname, (GLenum)param)),
+            GL_INVALID_ENUM);
 
     if (target == GL_TEXTURE_2D || target == GL_TEXTURE_EXTERNAL_OES) {
         ctx->override2DTextureTarget(target);
@@ -810,6 +849,10 @@ void GLEncoder::s_glTexParameterx(void* self,
     GLEncoder* ctx = (GLEncoder*)self;
     const GLClientState* state = ctx->m_state;
 
+    SET_ERROR_IF((target == GL_TEXTURE_EXTERNAL_OES &&
+            !isValidTextureExternalParam(pname, (GLenum)param)),
+            GL_INVALID_ENUM);
+
     if (target == GL_TEXTURE_2D || target == GL_TEXTURE_EXTERNAL_OES) {
         ctx->override2DTextureTarget(target);
         ctx->m_glTexParameterx_enc(ctx, GL_TEXTURE_2D, pname, param);
@@ -825,6 +868,10 @@ void GLEncoder::s_glTexParameteriv(void* self,
     GLEncoder* ctx = (GLEncoder*)self;
     const GLClientState* state = ctx->m_state;
 
+    SET_ERROR_IF((target == GL_TEXTURE_EXTERNAL_OES &&
+            !isValidTextureExternalParam(pname, (GLenum)params[0])),
+            GL_INVALID_ENUM);
+
     if (target == GL_TEXTURE_2D || target == GL_TEXTURE_EXTERNAL_OES) {
         ctx->override2DTextureTarget(target);
         ctx->m_glTexParameteriv_enc(ctx, GL_TEXTURE_2D, pname, params);
@@ -839,6 +886,10 @@ void GLEncoder::s_glTexParameterxv(void* self,
 {
     GLEncoder* ctx = (GLEncoder*)self;
     const GLClientState* state = ctx->m_state;
+
+    SET_ERROR_IF((target == GL_TEXTURE_EXTERNAL_OES &&
+            !isValidTextureExternalParam(pname, (GLenum)params[0])),
+            GL_INVALID_ENUM);
 
     if (target == GL_TEXTURE_2D || target == GL_TEXTURE_EXTERNAL_OES) {
         ctx->override2DTextureTarget(target);

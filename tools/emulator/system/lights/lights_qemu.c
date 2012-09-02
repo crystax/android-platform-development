@@ -44,12 +44,12 @@
 /* Set to 1 to enable debug messages to the log */
 #define DEBUG 0
 #if DEBUG
-# define D(...) LOGD(__VA_ARGS__)
+# define D(...) ALOGD(__VA_ARGS__)
 #else
 # define D(...) do{}while(0)
 #endif
 
-#define  E(...)  LOGE(__VA_ARGS__)
+#define  E(...)  ALOGE(__VA_ARGS__)
 
 /* Get brightness(0~255) from state. */
 static int
@@ -202,7 +202,7 @@ static struct hw_module_methods_t lights_module_methods = {
 /*
  * The emulator lights Module
  */
-const struct hw_module_t HAL_MODULE_INFO_SYM = {
+struct hw_module_t HAL_MODULE_INFO_SYM = {
     .tag = HARDWARE_MODULE_TAG,
     .version_major = 1,
     .version_minor = 0,

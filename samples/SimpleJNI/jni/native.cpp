@@ -24,7 +24,7 @@
 static jint
 add(JNIEnv *env, jobject thiz, jint a, jint b) {
 int result = a + b;
-    LOGI("%d + %d = %d", a, b, result);
+    ALOGI("%d + %d = %d", a, b, result);
     return result;
 }
 
@@ -44,11 +44,11 @@ static int registerNativeMethods(JNIEnv* env, const char* className,
 
     clazz = env->FindClass(className);
     if (clazz == NULL) {
-        LOGE("Native registration unable to find class '%s'", className);
+        ALOGE("Native registration unable to find class '%s'", className);
         return JNI_FALSE;
     }
     if (env->RegisterNatives(clazz, gMethods, numMethods) < 0) {
-        LOGE("RegisterNatives failed for '%s'", className);
+        ALOGE("RegisterNatives failed for '%s'", className);
         return JNI_FALSE;
     }
 
@@ -89,16 +89,16 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved)
     jint result = -1;
     JNIEnv* env = NULL;
     
-    LOGI("JNI_OnLoad");
+    ALOGI("JNI_OnLoad");
 
     if (vm->GetEnv(&uenv.venv, JNI_VERSION_1_4) != JNI_OK) {
-        LOGE("ERROR: GetEnv failed");
+        ALOGE("ERROR: GetEnv failed");
         goto bail;
     }
     env = uenv.env;
 
     if (registerNatives(env) != JNI_TRUE) {
-        LOGE("ERROR: registerNatives failed");
+        ALOGE("ERROR: registerNatives failed");
         goto bail;
     }
     

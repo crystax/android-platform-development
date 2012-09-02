@@ -64,6 +64,10 @@
     <string name="activity_animation_msg">Press a button to launch an activity with a custom animation.</string>
     <string name="activity_animation_fade">Fade in</string>
     <string name="activity_animation_zoom">Zoom in</string>
+    <string name="activity_modern_animation_fade">Modern fade in</string>
+    <string name="activity_modern_animation_zoom">Modern zoom in</string>
+    <string name="activity_scale_up_animation">Scale up</string>
+    <string name="activity_zoom_thumbnail_animation">Thumbnail zoom</string>
 
     <string name="activity_save_restore">App/Activity/Save &amp; Restore State</string>
     <string name="save_restore_msg">Demonstration of saving and restoring activity state in onSaveInstanceState() and onCreate().</string>
@@ -87,6 +91,8 @@
     <string name="activity_recreate_msg">Demonstration recreating an activity, to have
         it reconstructed with significant new changes.  In this case the theme is changed.</string>
     <string name="recreate">Recreate</string>
+
+    <string name="activity_finish_affinity">App/Activity/Finish Affinity</string>
 
     <string name="activity_receive_result">App/Activity/Receive Result</string>
     <string name="pick_result">Pick a result to send, or BACK to cancel.</string>
@@ -158,6 +164,8 @@
     <string name="fragment_tabs">App/Fragment/Tabs</string>
 
     <string name="loader_cursor">App/Loader/Cursor</string>
+
+    <string name="loader_retained">App/Loader/Retained</string>
 
     <string name="loader_custom">App/Loader/Custom</string>
 
@@ -238,6 +246,20 @@
             implement services that run in the foreground when needed.</string>
     <string name="start_service_foreground">Start Service Foreground</string>
     <string name="start_service_background">Start Service Background</string>
+
+    <string name="activity_isolated_service_controller">App/Service/Isolated Service Controller</string>
+    <string name="isolated_service_controller">This demonstrates the use of android:isolatedProcess
+            with services.  There are two services, which can be independently controlled; they will
+            each run in their own isolated process</string>
+    <string name="start_service_1">Start Service 1</string>
+    <string name="stop_service_1">Stop Service 1</string>
+    <string name="bind_service_1">Bind Service 1</string>
+    <string name="start_service_2">Start Service 2</string>
+    <string name="stop_service_2">Stop Service 2</string>
+    <string name="bind_service_2">Bind Service 2</string>
+    <string name="isolated_service_1_started">Isolated service 1 has started</string>
+    <string name="isolated_service_1_stopped">Isolated service 1 has stopped</string>
+    <string name="isolated_service_1_label">Sample Isolated Service 1</string>
 
     <string name="one_shot_received">The one-shot alarm has gone off</string>
     <string name="repeating_received">The repeating alarm has gone off</string>
@@ -1019,14 +1041,21 @@
     <string name="linear_layout_8_b">B</string>
     <string name="linear_layout_8_c">C</string>
     <string name="linear_layout_9_button">Button</string>
-    <string name="link_text_auto"><b>text1:</b> This is some text.  In
+    <string name="link_text_auto"><b>text1: Various kinds
+      of data that will be auto-linked.</b>  In
       this text are some things that are actionable.  For instance,
       you can click on http://www.google.com and it will launch the
-      web browser.  You can click on google.com too.  And, if you
-      click on (415) 555-1212 it should dial the phone.
+      web browser.  You can click on google.com too.  If you
+      click on (415) 555-1212 it should dial the phone.  Or just write
+      foobar@example.com for an e-mail link.  If you have a URI like
+      http://www.example.com/lala/foobar@example.com you should get the
+      full link not the e-mail address.  Or you can put a location
+      like 1600 Amphitheatre Parkway, Mountain View, CA 94043.  To summarize:
+      https://www.google.com, or 650-253-0000, somebody@example.com,
+      or 9606 North MoPac Expressway, Suite 400, Austin, TX 78759.
     </string>
-    <string name="link_text_manual"><b>text2:</b> This is some other
-      text, with a <a href="http://www.google.com">link</a> specified
+    <string name="link_text_manual"><b>text2: Explicit links using &lt;a&gt; markup.</b>
+      This has markup for a <a href="http://www.google.com">link</a> specified
       via an &lt;a&gt; tag.  Use a \"tel:\" URL
       to <a href="tel:4155551212">dial a phone number</a>.
     </string>
@@ -1195,11 +1224,9 @@
 
     <string name="google_login_username_text"></string>
 
-    <string name="incoming_message_notify_text">Show Notification</string>
-
     <string name="incoming_message_info_message_text">this is the text of a previous message.\nkthx. meet u for dinner. cul8r</string>
 
-    <string name="incoming_message_view_message_text">this is the text of a previous message.\nkthx. meet u for dinner. cul8r</string>
+    <string name="incoming_message_view_message_text">This is the text of the posted notification.</string>
     <string name="imcoming_message_view_message2_text">Did you notice that the status bar icon disappeared?</string>
     <string name="imcoming_message_ticker_text">New text message: <xliff:g id="text">%0$s</xliff:g></string>
 
@@ -1239,6 +1266,9 @@
     <string name="chronometer_set_format">Set format string</string>
     <string name="chronometer_clear_format">Clear format string</string>
     <string name="chronometer_initial_format">Initial format: <xliff:g id="initial-format">%s</xliff:g></string>
+
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
 
     <!-- ============================ -->
     <!--  vibrator examples strings  -->
@@ -1291,6 +1321,10 @@
     <!-- ============================ -->
     <!--  Accessibility examples strings  -->
     <!-- ============================ -->
+
+    <string name="accessibility_node_provider">Accessibility/Accessibility Node Provider</string>
+    <string name="accessibility_node_provider_instructions">Enable TalkBack and Explore-by-touch from accessibility
+        settings. Then touch the colored squares.</string>
 
     <string name="accessibility_service">Accessibility/Accessibility Service</string>
     <string name="accessibility_service_label">ClockBack</string>

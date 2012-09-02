@@ -33,6 +33,7 @@
 #include <string.h>		/* For memset() */
 #include <sys/types.h>
 #include <asm/signal.h>
+#include <asm/sigcontext.h>
 
 #define __ARCH_SI_UID_T __kernel_uid32_t
 #include <asm/siginfo.h>
@@ -42,12 +43,15 @@ __BEGIN_DECLS
 
 typedef int sig_atomic_t;
 
-/* crepy NIG / _NSIG handling, just to be safe */
-#ifndef NSIG
-#  define NSIG  _NSIG
-#endif
+/* _NSIG is used by the SIGRTMAX definition under <asm/signal.h>, however
+ * its definition is part of a #if __KERNEL__ .. #endif block in the original
+ * kernel headers and is thus not part of our cleaned-up versions.
+ *
+ * Looking at the current kernel sources, it is defined as 64 for all
+ * architectures except for the 'mips' one which set it to 128.
+ */
 #ifndef _NSIG
-#  define _NSIG  NSIG
+#  define _NSIG  64
 #endif
 
 extern const char * const sys_siglist[];

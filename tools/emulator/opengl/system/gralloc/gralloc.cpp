@@ -35,13 +35,13 @@
 #define DEBUG  0
 
 #if DEBUG >= 1
-#  define D(...)   LOGD(__VA_ARGS__)
+#  define D(...)   ALOGD(__VA_ARGS__)
 #else
 #  define D(...)   ((void)0)
 #endif
 
 #if DEBUG >= 2
-#  define DD(...)  LOGD(__VA_ARGS__)
+#  define DD(...)  ALOGD(__VA_ARGS__)
 #else
 #  define DD(...)  ((void)0)
 #endif
@@ -113,12 +113,12 @@ static int map_buffer(cb_handle_t *cb, void **vaddr)
 #define DEFINE_AND_VALIDATE_HOST_CONNECTION \
     HostConnection *hostCon = HostConnection::get(); \
     if (!hostCon) { \
-        LOGE("gralloc: Failed to get host connection\n"); \
+        ALOGE("gralloc: Failed to get host connection\n"); \
         return -EIO; \
     } \
     renderControl_encoder_context_t *rcEnc = hostCon->rcEncoder(); \
     if (!rcEnc) { \
-        LOGE("gralloc: Failed to get renderControl encoder context\n"); \
+        ALOGE("gralloc: Failed to get renderControl encoder context\n"); \
         return -EIO; \
     }
 
@@ -144,13 +144,16 @@ static int gralloc_alloc(alloc_device_t* dev,
     if (hw_write && sw_write) {
         return -EINVAL;
     }
+    bool sw_read = (0 != (usage & GRALLOC_USAGE_SW_READ_MASK));
 
     int ashmem_size = 0;
-    *pStride = 0;
+    int stride = w;
+
     GLenum glFormat = 0;
     GLenum glType = 0;
 
     int bpp = 0;
+    int align = 1;
     switch (format) {
         case HAL_PIXEL_FORMAT_RGBA_8888:
         case HAL_PIXEL_FORMAT_RGBX_8888:
@@ -179,7 +182,16 @@ static int gralloc_alloc(alloc_device_t* dev,
             glFormat = GL_RGBA4_OES;
             glType = GL_UNSIGNED_SHORT_4_4_4_4;
             break;
-
+        case HAL_PIXEL_FORMAT_RAW_SENSOR:
+            bpp = 2;
+            align = 16*bpp;
+            if (! (sw_read && sw_write) ) {
+                // Raw sensor data cannot be used by HW
+                return -EINVAL;
+            }
+            glFormat = GL_LUMINANCE;
+            glType = GL_UNSIGNED_SHORT;
+            break;
         default:
             return -EINVAL;
     }
@@ -189,15 +201,16 @@ static int gralloc_alloc(alloc_device_t* dev,
         ashmem_size += sizeof(uint32_t);
     }
 
-    if (usage & (GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK)) {
+    if (sw_read || sw_write) {
         // keep space for image on guest memory if SW access is needed
-        int align = 1;
+
         size_t bpr = (w*bpp + (align-1)) & ~(align-1);
         ashmem_size += (bpr * h);
-        *pStride = bpr / bpp;
+        stride = bpr / bpp;
     }
 
-    D("gralloc_alloc ashmem_size=%d, tid %d\n", ashmem_size, gettid());
+    D("gralloc_alloc ashmem_size=%d, stride=%d, tid %d\n", ashmem_size, stride,
+            gettid());
 
     //
     // Allocate space in ashmem if needed
@@ -209,7 +222,8 @@ static int gralloc_alloc(alloc_device_t* dev,
 
         fd = ashmem_create_region("gralloc-buffer", ashmem_size);
         if (fd < 0) {
-            LOGE("gralloc_alloc failed to create ashmem region: %s\n", strerror(errno));
+            ALOGE("gralloc_alloc failed to create ashmem region: %s\n",
+                    strerror(errno));
             return -errno;
         }
     }
@@ -265,6 +279,7 @@ static int gralloc_alloc(alloc_device_t* dev,
     pthread_mutex_unlock(&grdev->lock);
 
     *pHandle = cb;
+    *pStride = stride;
     return 0;
 }
 
@@ -279,8 +294,8 @@ static int gralloc_free(alloc_device_t* dev,
 
     if (cb->hostHandle != 0) {
         DEFINE_AND_VALIDATE_HOST_CONNECTION;
-        D("Destroying host ColorBuffer 0x%x\n", cb->hostHandle);
-        rcEnc->rcDestroyColorBuffer(rcEnc, cb->hostHandle);
+        D("Closing host ColorBuffer 0x%x\n", cb->hostHandle);
+        rcEnc->rcCloseColorBuffer(rcEnc, cb->hostHandle);
     }
 
     //
@@ -440,6 +455,12 @@ static int gralloc_register_buffer(gralloc_module_t const* module,
         return -EINVAL;
     }
 
+    if (cb->hostHandle != 0) {
+        DEFINE_AND_VALIDATE_HOST_CONNECTION;
+        D("Opening host ColorBuffer 0x%x\n", cb->hostHandle);
+        rcEnc->rcOpenColorBuffer(rcEnc, cb->hostHandle);
+    }
+
     //
     // if the color buffer has ashmem region and it is not mapped in this
     // process map it now.
@@ -469,6 +490,12 @@ static int gralloc_unregister_buffer(gralloc_module_t const* module,
     if (!gr || !cb_handle_t::validate(cb)) {
         ERR("gralloc_unregister_buffer(%p): invalid buffer", cb);
         return -EINVAL;
+    }
+
+    if (cb->hostHandle != 0) {
+        DEFINE_AND_VALIDATE_HOST_CONNECTION;
+        D("Closing host ColorBuffer 0x%x\n", cb->hostHandle);
+        rcEnc->rcCloseColorBuffer(rcEnc, cb->hostHandle);
     }
 
     //
@@ -503,7 +530,7 @@ static int gralloc_lock(gralloc_module_t const* module,
     private_module_t *gr = (private_module_t *)module;
     cb_handle_t *cb = (cb_handle_t *)handle;
     if (!gr || !cb_handle_t::validate(cb)) {
-        LOGE("gralloc_lock bad handle\n");
+        ALOGE("gralloc_lock bad handle\n");
         return -EINVAL;
     }
 
@@ -522,7 +549,7 @@ static int gralloc_lock(gralloc_module_t const* module,
          (!sw_read && !sw_write) ||
          (sw_read && !sw_read_allowed) ||
          (sw_write && !sw_write_allowed) ) {
-        LOGE("gralloc_lock usage mismatch usage=0x%x cb->usage=0x%x\n", usage, cb->usage);
+        ALOGE("gralloc_lock usage mismatch usage=0x%x cb->usage=0x%x\n", usage, cb->usage);
         return -EINVAL;
     }
 
@@ -559,17 +586,18 @@ static int gralloc_lock(gralloc_module_t const* module,
         if (hostSyncStatus < 0) {
             // host failed the color buffer sync - probably since it was already
             // locked for write access. fail the lock.
-            LOGE("gralloc_lock cacheFlush failed postCount=%d sw_read=%d\n",
+            ALOGE("gralloc_lock cacheFlush failed postCount=%d sw_read=%d\n",
                  postCount, sw_read);
             return -EBUSY;
         }
 
-        //
-        // is virtual address required ?
-        //
-        if (sw_read || sw_write) {
-            *vaddr = cpu_addr;
-        }
+    }
+
+    //
+    // is virtual address required ?
+    //
+    if (sw_read || sw_write) {
+        *vaddr = cpu_addr;
     }
 
     if (sw_write) {
@@ -669,7 +697,7 @@ static int gralloc_device_open(const hw_module_t* module,
         // return error if connection with host can not be established
         HostConnection *hostCon = HostConnection::get();
         if (!hostCon) {
-            LOGE("gralloc: failed to get host connection while opening %s\n", name);
+            ALOGE("gralloc: failed to get host connection while opening %s\n", name);
             return -EIO;
         }
 
@@ -805,7 +833,7 @@ fallback_init(void)
     if (atoi(prop) > 0) {
         return;
     }
-    LOGD("Emulator without GPU emulation detected.");
+    ALOGD("Emulator without GPU emulation detected.");
     module = dlopen("/system/lib/hw/gralloc.default.so", RTLD_LAZY|RTLD_LOCAL);
     if (module != NULL) {
         sFallback = reinterpret_cast<gralloc_module_t*>(dlsym(module, HAL_MODULE_INFO_SYM_AS_STR));
@@ -814,6 +842,6 @@ fallback_init(void)
         }
     }
     if (sFallback == NULL) {
-        LOGE("Could not find software fallback module!?");
+        ALOGE("Could not find software fallback module!?");
     }
 }

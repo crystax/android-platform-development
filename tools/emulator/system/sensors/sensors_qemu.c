@@ -39,12 +39,12 @@
 #include <hardware/sensors.h>
 
 #if 0
-#define  D(...)  LOGD(__VA_ARGS__)
+#define  D(...)  ALOGD(__VA_ARGS__)
 #else
 #define  D(...)  ((void)0)
 #endif
 
-#define  E(...)  LOGE(__VA_ARGS__)
+#define  E(...)  ALOGE(__VA_ARGS__)
 
 #include <hardware/qemud.h>
 
@@ -206,7 +206,7 @@ control__set_delay(struct sensors_poll_device_t *dev, int32_t ms)
 }
 
 static int
-control__close(struct hw_device_t *dev) 
+control__close(struct hw_device_t *dev)
 {
     SensorPoll*  ctl = (void*)dev;
     close(ctl->fd);
@@ -281,7 +281,7 @@ pick_sensor(SensorPoll*       data,
             return i;
         }
     }
-    LOGE("No sensor to return!!! pendingSensors=%08x", data->pendingSensors);
+    ALOGE("No sensor to return!!! pendingSensors=%08x", data->pendingSensors);
     // we may end-up in a busy loop, slow things down, just in case.
     usleep(100000);
     return -EINVAL;
@@ -350,7 +350,7 @@ data__poll(struct sensors_poll_device_t *dev, sensors_event_t* values)
         }
 
         /* "temperature:<celsius>" */
-        if (sscanf(buff, "temperature:%g", params+0) == 2) {
+        if (sscanf(buff, "temperature:%g", params+0) == 1) {
             new_sensors |= SENSORS_TEMPERATURE;
             data->sensors[ID_TEMPERATURE].temperature = params[0];
             continue;
@@ -397,12 +397,12 @@ data__poll(struct sensors_poll_device_t *dev, sensors_event_t* values)
 }
 
 static int
-data__close(struct hw_device_t *dev) 
+data__close(struct hw_device_t *dev)
 {
     SensorPoll* data = (SensorPoll*)dev;
     if (data) {
         if (data->events_fd >= 0) {
-            //LOGD("(device close) about to close fd=%d", data->events_fd);
+            //ALOGD("(device close) about to close fd=%d", data->events_fd);
             close(data->events_fd);
         }
         free(data);
@@ -545,7 +545,7 @@ static const struct sensor_t sSensorListInit[] = {
 static struct sensor_t  sSensorList[MAX_NUM_SENSORS];
 
 static int sensors__get_sensors_list(struct sensors_module_t* module,
-        struct sensor_t const** list) 
+        struct sensor_t const** list)
 {
     int  fd = qemud_channel_open(SENSORS_SERVICE_NAME);
     char buffer[12];
@@ -623,7 +623,7 @@ static struct hw_module_methods_t sensors_module_methods = {
     .open = open_sensors
 };
 
-const struct sensors_module_t HAL_MODULE_INFO_SYM = {
+struct sensors_module_t HAL_MODULE_INFO_SYM = {
     .common = {
         .tag = HARDWARE_MODULE_TAG,
         .version_major = 1,

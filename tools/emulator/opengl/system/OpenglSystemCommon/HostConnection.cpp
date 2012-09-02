@@ -63,12 +63,12 @@ HostConnection *HostConnection::get()
         if (useQemuPipe) {
             QemuPipeStream *stream = new QemuPipeStream(STREAM_BUFFER_SIZE);
             if (!stream) {
-                LOGE("Failed to create QemuPipeStream for host connection!!!\n");
+                ALOGE("Failed to create QemuPipeStream for host connection!!!\n");
                 delete con;
                 return NULL;
             }
             if (stream->connect() < 0) {
-                LOGE("Failed to connect to host (QemuPipeStream)!!!\n");
+                ALOGE("Failed to connect to host (QemuPipeStream)!!!\n");
                 delete stream;
                 delete con;
                 return NULL;
@@ -79,13 +79,13 @@ HostConnection *HostConnection::get()
         {
             TcpStream *stream = new TcpStream(STREAM_BUFFER_SIZE);
             if (!stream) {
-                LOGE("Failed to create TcpStream for host connection!!!\n");
+                ALOGE("Failed to create TcpStream for host connection!!!\n");
                 delete con;
                 return NULL;
             }
 
             if (stream->connect("10.0.2.2", STREAM_PORT_NUM) < 0) {
-                LOGE("Failed to connect to host (TcpStream)!!!\n");
+                ALOGE("Failed to connect to host (TcpStream)!!!\n");
                 delete stream;
                 delete con;
                 return NULL;
@@ -99,7 +99,7 @@ HostConnection *HostConnection::get()
         *pClientFlags = 0;
         con->m_stream->commitBuffer(sizeof(unsigned int));
 
-        LOGD("HostConnection::get() New Host Connection established %p, tid %d\n", con, gettid());
+        ALOGD("HostConnection::get() New Host Connection established %p, tid %d\n", con, gettid());
         tinfo->hostConn = con;
     }
 

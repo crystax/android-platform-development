@@ -37,7 +37,6 @@ subdirs += \
 	development/host \
 	development/tools/etc1tool \
 	development/tools/line_endings \
-	development/tools/emulator/opengl \
 	external/clang \
 	external/easymock \
 	external/expat \
@@ -47,11 +46,14 @@ subdirs += \
 	external/zlib \
 	frameworks/base \
 	frameworks/compile \
+	frameworks/native \
 	system/core/adb \
 	system/core/fastboot \
 	system/core/libcutils \
 	system/core/liblog \
-	system/core/libzipfile
+	system/core/libsparse \
+	system/core/libzipfile \
+	system/extras/ext4_utils
 
 # -----
 # Whitelist of platform specific projects that DO require Java

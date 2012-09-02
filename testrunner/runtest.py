@@ -69,7 +69,7 @@ class TestRunner(object):
       "for a list of tests, or you can launch one or more tests.")
 
   # default value for make -jX
-  _DEFAULT_JOBS = 4
+  _DEFAULT_JOBS = 16
 
   _DALVIK_VERIFIER_OFF_PROP = "dalvik.vm.dexopt-flags = v=n"
 
@@ -233,8 +233,9 @@ class TestRunner(object):
     self._TurnOffVerifier(tests)
     self._DoFullBuild(tests)
 
-    target_set = Set()
-    extra_args_set = Set()
+    target_set = []
+
+    extra_args_set = []
     for test_suite in tests:
       self._AddBuildTarget(test_suite, target_set, extra_args_set)
 
@@ -260,8 +261,8 @@ class TestRunner(object):
           logger.Log(cmd)
           run_command.RunCommand(cmd, return_output=False)
 
-      target_build_string = " ".join(list(target_set))
-      extra_args_string = " ".join(list(extra_args_set))
+      target_build_string = " ".join(target_set)
+      extra_args_string = " ".join(extra_args_set)
 
       # mmm cannot be used from python, so perform a similar operation using
       # ONE_SHOT_MAKEFILE
@@ -315,7 +316,7 @@ class TestRunner(object):
     if not test_suite.IsFullMake():
       build_dir = test_suite.GetBuildPath()
       if self._AddBuildTargetPath(build_dir, target_set):
-        extra_args_set.add(test_suite.GetExtraBuildArgs())
+        extra_args_set.append(test_suite.GetExtraBuildArgs())
       for path in test_suite.GetBuildDependencies(self._options):
         self._AddBuildTargetPath(path, target_set)
 
@@ -323,7 +324,7 @@ class TestRunner(object):
     if build_dir is not None:
       build_file_path = os.path.join(build_dir, "Android.mk")
       if os.path.isfile(os.path.join(self._root_path, build_file_path)):
-        target_set.add(build_file_path)
+        target_set.append(build_file_path)
         return True
       else:
         logger.Log("%s has no Android.mk, skipping" % build_dir)
@@ -382,18 +383,33 @@ class TestRunner(object):
         if self._options.preview:
           logger.Log("adb shell \"echo %s >> /data/local.prop\""
                      % self._DALVIK_VERIFIER_OFF_PROP)
+          logger.Log("adb shell chmod 644 /data/local.prop")
           logger.Log("adb reboot")
           logger.Log("adb wait-for-device")
         else:
           logger.Log("Turning off dalvik verifier and rebooting")
           self._adb.SendShellCommand("\"echo %s >> /data/local.prop\""
                                      % self._DALVIK_VERIFIER_OFF_PROP)
-          self._adb.SendCommand("reboot")
-          # wait for device to go offline
-          time.sleep(10)
-          self._adb.SendCommand("wait-for-device", timeout_time=60,
-                                retry_count=3)
-          self._adb.EnableAdbRoot()
+
+          self._ChmodReboot()
+      elif not self._options.preview:
+        # check the permissions on the file
+        permout = self._adb.SendShellCommand("ls -l /data/local.prop")
+        if not "-rw-r--r--" in permout:
+          logger.Log("Fixing permissions on /data/local.prop and rebooting")
+          self._ChmodReboot()
+
+  def _ChmodReboot(self):
+    """Perform a chmod of /data/local.prop and reboot.
+    """
+    self._adb.SendShellCommand("chmod 644 /data/local.prop")
+    self._adb.SendCommand("reboot")
+    # wait for device to go offline
+    time.sleep(10)
+    self._adb.SendCommand("wait-for-device", timeout_time=60,
+                          retry_count=3)
+    self._adb.EnableAdbRoot()
+
 
   def RunTests(self):
     """Main entry method - executes the tests according to command line args."""

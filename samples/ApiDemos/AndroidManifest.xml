@@ -161,6 +161,16 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".app.FinishAffinity"
+                android:label="@string/activity_finish_affinity"
+                android:taskAffinity=":finishing"
+                android:enabled="@bool/atLeastJellyBean">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SAMPLE_CODE" />
+            </intent-filter>
+        </activity>
+
         <activity android:name=".app.SoftInputModes"
                 android:label="@string/soft_input_modes">
             <intent-filter>
@@ -409,6 +419,15 @@
                   android:enabled="@bool/atLeastHoneycomb" />
 <!-- END_INCLUDE(loader_throttle) -->
 
+        <activity android:name=".app.LoaderRetained"
+                android:label="@string/loader_retained"
+                android:enabled="@bool/atLeastHoneycomb">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SAMPLE_CODE" />
+            </intent-filter>
+        </activity>
+
         <!-- Intent Samples -->
 
         <activity android:name=".app.Intents" android:label="@string/activity_intents">
@@ -519,6 +538,21 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".app.IsolatedService$Controller"
+                android:label="@string/activity_isolated_service_controller"
+                android:launchMode="singleTop"
+                android:enabled="@bool/atLeastJellyBean">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SAMPLE_CODE" />
+            </intent-filter>
+        </activity>
+
+        <service android:name=".app.IsolatedService" android:isolatedProcess="true"
+                android:enabled="@bool/atLeastJellyBean" />
+        <service android:name=".app.IsolatedService2" android:isolatedProcess="true"
+                android:enabled="@bool/atLeastJellyBean" />
+
         <!-- Alarm Samples -->
 
         <receiver android:name=".app.OneShotAlarm" android:process=":remote" />
@@ -554,7 +588,8 @@
         </activity>
 
         <service android:name=".accessibility.ClockBackService"
-            android:label="@string/accessibility_service_label">
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
@@ -571,7 +606,8 @@
 
         <service android:name=".accessibility.TaskBackService"
                  android:label="@string/accessibility_query_window_label"
-                 android:enabled="@bool/atLeastIceCreamSandwich">
+                 android:enabled="@bool/atLeastIceCreamSandwich"
+                 android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
@@ -615,23 +651,27 @@
             </intent-filter>
         </activity>
 
-<!-- BEGIN_INCLUDE(no_task_affinity) -->
         <activity android:name=".app.IncomingMessage"
-                android:label="App/Notification/IncomingMessage"
-                android:taskAffinity="">
+                android:label="App/Notification/IncomingMessage">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.SAMPLE_CODE" />
             </intent-filter>
         </activity>
-<!-- END_INCLUDE(no_task_affinity) -->
 
-        <activity android:name=".app.IncomingMessageView" android:label="App/Notification/IncomingMessageView">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.EMBED" />
-            </intent-filter>
+        <activity android:name=".app.IncomingMessageView"
+                android:label="App/Notification/IncomingMessageView">
         </activity>
+
+<!-- BEGIN_INCLUDE(interstitial_affinity) -->
+        <activity android:name=".app.IncomingMessageInterstitial"
+                android:label="You have messages"
+                android:theme="@style/ThemeHoloDialog"
+                android:launchMode="singleTask"
+                android:taskAffinity=""
+                android:excludeFromRecents="true">
+        </activity>
+<!-- END_INCLUDE(interstitial_affinity) -->
 
         <!-- This is used to display a notification selected by the user
              from StatusBarNotifications.  Note the configuration here so
@@ -875,6 +915,16 @@
 
         <activity android:name=".app.ActionBarShareActionProviderActivity"
                 android:label="@string/action_bar_share_action_provider"
+                android:enabled="@bool/atLeastIceCreamSandwich">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SAMPLE_CODE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Accessibility Samples -->
+        <activity android:name=".accessibility.AccessibilityNodeProviderActivity"
+                android:label="@string/accessibility_node_provider"
                 android:enabled="@bool/atLeastIceCreamSandwich">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -2175,7 +2225,29 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".view.OverscanActivity" android:label="Views/Full Screen Modes">
+        <activity android:name=".view.OverscanActivity"
+                android:label="Views/System UI Visibility/System UI Modes"
+                android:uiOptions="splitActionBarWhenNarrow">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SAMPLE_CODE" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".view.ContentBrowserActivity"
+                android:label="Views/System UI Visibility/Content Browser"
+                android:theme="@android:style/Theme.Holo.Light.DarkActionBar"
+                android:uiOptions="splitActionBarWhenNarrow">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SAMPLE_CODE" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".view.VideoPlayerActivity"
+                android:label="Views/System UI Visibility/Video Player"
+                android:theme="@android:style/Theme.Holo"
+                android:uiOptions="splitActionBarWhenNarrow">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.SAMPLE_CODE" />

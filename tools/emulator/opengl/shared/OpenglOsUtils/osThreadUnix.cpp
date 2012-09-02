@@ -80,14 +80,14 @@ void *
 Thread::thread_main(void *p_arg)
 {
     Thread *self = (Thread *)p_arg;
-    void *ret = (void *)self->Main();
+    int ret = self->Main();
 
     pthread_mutex_lock(&self->m_lock);
     self->m_isRunning = false;
-    self->m_exitStatus = (int)ret;
+    self->m_exitStatus = ret;
     pthread_mutex_unlock(&self->m_lock);
 
-    return ret;
+    return (void*)ret;
 }
 
 } // of namespace osUtils

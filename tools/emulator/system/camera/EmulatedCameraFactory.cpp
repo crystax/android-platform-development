@@ -25,6 +25,7 @@
 #include <cutils/properties.h>
 #include "EmulatedQemuCamera.h"
 #include "EmulatedFakeCamera.h"
+#include "EmulatedFakeCamera2.h"
 #include "EmulatedCameraFactory.h"
 
 extern camera_module_t HAL_MODULE_INFO_SYM;
@@ -40,9 +41,8 @@ EmulatedCameraFactory::EmulatedCameraFactory()
         : mQemuClient(),
           mEmulatedCameras(NULL),
           mEmulatedCameraNum(0),
-          mFakeCameraID(-1),
+          mFakeCameraNum(0),
           mConstructedOK(false)
-
 {
     /* Connect to the factory service in the emulator, and create Qemu cameras. */
     if (mQemuClient.connectClient(NULL) == NO_ERROR) {
@@ -51,43 +51,101 @@ EmulatedCameraFactory::EmulatedCameraFactory()
         createQemuCameras();
     }
 
-    if (isFakeCameraEmulationOn()) {
-        /* ID fake camera with the number of created 'qemud' cameras. */
-        mFakeCameraID = mEmulatedCameraNum;
+    if (isBackFakeCameraEmulationOn()) {
+        /* Camera ID. */
+        const int camera_id = mEmulatedCameraNum;
+        /* Use fake camera to emulate back-facing camera. */
+        mEmulatedCameraNum++;
+
+        /* Make sure that array is allocated (in case there were no 'qemu'
+         * cameras created. Note that we preallocate the array so it may contain
+         * two fake cameras: one facing back, and another facing front. */
+        if (mEmulatedCameras == NULL) {
+            mEmulatedCameras = new EmulatedBaseCamera*[mEmulatedCameraNum + 1];
+            if (mEmulatedCameras == NULL) {
+                ALOGE("%s: Unable to allocate emulated camera array for %d entries",
+                     __FUNCTION__, mEmulatedCameraNum);
+                return;
+            }
+            memset(mEmulatedCameras, 0,
+                    (mEmulatedCameraNum + 1) * sizeof(EmulatedBaseCamera*));
+        }
+
+        /* Create, and initialize the fake camera */
+        switch (getBackCameraHalVersion()) {
+            case 1:
+                mEmulatedCameras[camera_id] =
+                        new EmulatedFakeCamera(camera_id, false, &HAL_MODULE_INFO_SYM.common);
+                break;
+            case 2:
+                mEmulatedCameras[camera_id] =
+                        new EmulatedFakeCamera2(camera_id, false, &HAL_MODULE_INFO_SYM.common);
+                break;
+            default:
+                ALOGE("%s: Unknown back camera hal version requested: %d", __FUNCTION__,
+                        getBackCameraHalVersion());
+        }
+        if (mEmulatedCameras[camera_id] != NULL) {
+            ALOGV("%s: Back camera device version is %d", __FUNCTION__,
+                    getBackCameraHalVersion());
+            if (mEmulatedCameras[camera_id]->Initialize() != NO_ERROR) {
+                delete mEmulatedCameras[camera_id];
+                mEmulatedCameras--;
+            }
+        } else {
+            mEmulatedCameras--;
+            ALOGE("%s: Unable to instantiate fake camera class", __FUNCTION__);
+        }
+    }
+
+    if (isFrontFakeCameraEmulationOn()) {
+        /* Camera ID. */
+        const int camera_id = mEmulatedCameraNum;
+        /* Use fake camera to emulate front-facing camera. */
         mEmulatedCameraNum++;
 
         /* Make sure that array is allocated (in case there were no 'qemu'
          * cameras created. */
         if (mEmulatedCameras == NULL) {
-            mEmulatedCameras = new EmulatedCamera*[mEmulatedCameraNum];
+            mEmulatedCameras = new EmulatedBaseCamera*[mEmulatedCameraNum];
             if (mEmulatedCameras == NULL) {
-                LOGE("%s: Unable to allocate emulated camera array for %d entries",
+                ALOGE("%s: Unable to allocate emulated camera array for %d entries",
                      __FUNCTION__, mEmulatedCameraNum);
                 return;
             }
-            memset(mEmulatedCameras, 0, mEmulatedCameraNum * sizeof(EmulatedCamera*));
+            memset(mEmulatedCameras, 0,
+                    mEmulatedCameraNum * sizeof(EmulatedBaseCamera*));
         }
 
         /* Create, and initialize the fake camera */
-        mEmulatedCameras[mFakeCameraID] =
-            new EmulatedFakeCamera(mFakeCameraID, &HAL_MODULE_INFO_SYM.common);
-        if (mEmulatedCameras[mFakeCameraID] != NULL) {
-            if (mEmulatedCameras[mFakeCameraID]->Initialize() != NO_ERROR) {
-                delete mEmulatedCameras[mFakeCameraID];
+        switch (getFrontCameraHalVersion()) {
+            case 1:
+                mEmulatedCameras[camera_id] =
+                        new EmulatedFakeCamera(camera_id, false, &HAL_MODULE_INFO_SYM.common);
+                break;
+            case 2:
+                mEmulatedCameras[camera_id] =
+                        new EmulatedFakeCamera2(camera_id, false, &HAL_MODULE_INFO_SYM.common);
+                break;
+            default:
+                ALOGE("%s: Unknown front camera hal version requested: %d", __FUNCTION__,
+                        getFrontCameraHalVersion());
+        }
+        if (mEmulatedCameras[camera_id] != NULL) {
+            ALOGV("%s: Front camera device version is %d", __FUNCTION__,
+                    getFrontCameraHalVersion());
+            if (mEmulatedCameras[camera_id]->Initialize() != NO_ERROR) {
+                delete mEmulatedCameras[camera_id];
                 mEmulatedCameras--;
-                mFakeCameraID = -1;
             }
         } else {
             mEmulatedCameras--;
-            mFakeCameraID = -1;
-            LOGE("%s: Unable to instantiate fake camera class", __FUNCTION__);
+            ALOGE("%s: Unable to instantiate fake camera class", __FUNCTION__);
         }
-    } else {
-        LOGD("Fake camera emulation is disabled.");
     }
 
-    LOGV("%d cameras are being emulated. Fake camera ID is %d",
-         mEmulatedCameraNum, mFakeCameraID);
+    ALOGV("%d cameras are being emulated. %d of them are fake cameras.",
+          mEmulatedCameraNum, mFakeCameraNum);
 
     mConstructedOK = true;
 }
@@ -107,24 +165,24 @@ EmulatedCameraFactory::~EmulatedCameraFactory()
 /****************************************************************************
  * Camera HAL API handlers.
  *
- * Each handler simply verifies existence of an appropriate EmulatedCamera
+ * Each handler simply verifies existence of an appropriate EmulatedBaseCamera
  * instance, and dispatches the call to that instance.
  *
  ***************************************************************************/
 
 int EmulatedCameraFactory::cameraDeviceOpen(int camera_id, hw_device_t** device)
 {
-    LOGV("%s: id = %d", __FUNCTION__, camera_id);
+    ALOGV("%s: id = %d", __FUNCTION__, camera_id);
 
     *device = NULL;
 
     if (!isConstructedOK()) {
-        LOGE("%s: EmulatedCameraFactory has failed to initialize", __FUNCTION__);
+        ALOGE("%s: EmulatedCameraFactory has failed to initialize", __FUNCTION__);
         return -EINVAL;
     }
 
     if (camera_id < 0 || camera_id >= getEmulatedCameraNum()) {
-        LOGE("%s: Camera id %d is out of bounds (%d)",
+        ALOGE("%s: Camera id %d is out of bounds (%d)",
              __FUNCTION__, camera_id, getEmulatedCameraNum());
         return -EINVAL;
     }
@@ -134,15 +192,15 @@ int EmulatedCameraFactory::cameraDeviceOpen(int camera_id, hw_device_t** device)
 
 int EmulatedCameraFactory::getCameraInfo(int camera_id, struct camera_info* info)
 {
-    LOGV("%s: id = %d", __FUNCTION__, camera_id);
+    ALOGV("%s: id = %d", __FUNCTION__, camera_id);
 
     if (!isConstructedOK()) {
-        LOGE("%s: EmulatedCameraFactory has failed to initialize", __FUNCTION__);
+        ALOGE("%s: EmulatedCameraFactory has failed to initialize", __FUNCTION__);
         return -EINVAL;
     }
 
     if (camera_id < 0 || camera_id >= getEmulatedCameraNum()) {
-        LOGE("%s: Camera id %d is out of bounds (%d)",
+        ALOGE("%s: Camera id %d is out of bounds (%d)",
              __FUNCTION__, camera_id, getEmulatedCameraNum());
         return -EINVAL;
     }
@@ -164,12 +222,12 @@ int EmulatedCameraFactory::device_open(const hw_module_t* module,
      */
 
     if (module != &HAL_MODULE_INFO_SYM.common) {
-        LOGE("%s: Invalid module %p expected %p",
+        ALOGE("%s: Invalid module %p expected %p",
              __FUNCTION__, module, &HAL_MODULE_INFO_SYM.common);
         return -EINVAL;
     }
     if (name == NULL) {
-        LOGE("%s: NULL name is not expected here", __FUNCTION__);
+        ALOGE("%s: NULL name is not expected here", __FUNCTION__);
         return -EINVAL;
     }
 
@@ -230,15 +288,15 @@ void EmulatedCameraFactory::createQemuCameras()
     }
 
     /* Allocate the array for emulated camera instances. Note that we allocate
-     * one more entry for the fake camera emulation. */
-    mEmulatedCameras = new EmulatedCamera*[num + 1];
+     * two more entries for back and front fake camera emulation. */
+    mEmulatedCameras = new EmulatedBaseCamera*[num + 2];
     if (mEmulatedCameras == NULL) {
-        LOGE("%s: Unable to allocate emulated camera array for %d entries",
+        ALOGE("%s: Unable to allocate emulated camera array for %d entries",
              __FUNCTION__, num + 1);
         free(camera_list);
         return;
     }
-    memset(mEmulatedCameras, 0, sizeof(EmulatedCamera*) * (num + 1));
+    memset(mEmulatedCameras, 0, sizeof(EmulatedBaseCamera*) * (num + 1));
 
     /*
      * Iterate the list, creating, and initializin emulated qemu cameras for each
@@ -292,11 +350,11 @@ void EmulatedCameraFactory::createQemuCameras()
                     delete qemu_cam;
                 }
             } else {
-                LOGE("%s: Unable to instantiate EmulatedQemuCamera",
+                ALOGE("%s: Unable to instantiate EmulatedQemuCamera",
                      __FUNCTION__);
             }
         } else {
-            LOGW("%s: Bad camera information: %s", __FUNCTION__, cur_entry);
+            ALOGW("%s: Bad camera information: %s", __FUNCTION__, cur_entry);
         }
 
         cur_entry = next_entry;
@@ -305,17 +363,66 @@ void EmulatedCameraFactory::createQemuCameras()
     mEmulatedCameraNum = index;
 }
 
-bool EmulatedCameraFactory::isFakeCameraEmulationOn()
+bool EmulatedCameraFactory::isBackFakeCameraEmulationOn()
 {
-    /* Defined by 'qemu.sf.fake_camera' boot property: If property is there
-     * and contains 'off', fake camera emulation is disabled. */
+    /* Defined by 'qemu.sf.fake_camera' boot property: if property exist, and
+     * is set to 'both', or 'back', then fake camera is used to emulate back
+     * camera. */
     char prop[PROPERTY_VALUE_MAX];
-    if (property_get("qemu.sf.fake_camera", prop, NULL) <= 0 ||
-        strcmp(prop, "off")) {
+    if ((property_get("qemu.sf.fake_camera", prop, NULL) > 0) &&
+        (!strcmp(prop, "both") || !strcmp(prop, "back"))) {
         return true;
     } else {
         return false;
     }
+}
+
+int EmulatedCameraFactory::getBackCameraHalVersion()
+{
+    /* Defined by 'qemu.sf.back_camera_hal_version' boot property: if the
+     * property doesn't exist, it is assumed to be 1. */
+    char prop[PROPERTY_VALUE_MAX];
+    if (property_get("qemu.sf.back_camera_hal", prop, NULL) > 0) {
+        char *prop_end = prop;
+        int val = strtol(prop, &prop_end, 10);
+        if (*prop_end == '\0') {
+            return val;
+        }
+        // Badly formatted property, should just be a number
+        ALOGE("qemu.sf.back_camera_hal is not a number: %s", prop);
+    }
+    return 1;
+}
+
+bool EmulatedCameraFactory::isFrontFakeCameraEmulationOn()
+{
+    /* Defined by 'qemu.sf.fake_camera' boot property: if property exist, and
+     * is set to 'both', or 'front', then fake camera is used to emulate front
+     * camera. */
+    char prop[PROPERTY_VALUE_MAX];
+    if ((property_get("qemu.sf.fake_camera", prop, NULL) > 0) &&
+        (!strcmp(prop, "both") || !strcmp(prop, "front"))) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+int EmulatedCameraFactory::getFrontCameraHalVersion()
+{
+    /* Defined by 'qemu.sf.front_camera_hal_version' boot property: if the
+     * property doesn't exist, it is assumed to be 1. */
+    char prop[PROPERTY_VALUE_MAX];
+    if (property_get("qemu.sf.front_camera_hal", prop, NULL) > 0) {
+        char *prop_end = prop;
+        int val = strtol(prop, &prop_end, 10);
+        if (*prop_end == '\0') {
+            return val;
+        }
+        // Badly formatted property, should just be a number
+        ALOGE("qemu.sf.front_camera_hal is not a number: %s", prop);
+    }
+    return 1;
 }
 
 /********************************************************************************

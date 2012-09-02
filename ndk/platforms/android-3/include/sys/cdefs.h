@@ -80,7 +80,7 @@
 #define	___STRING(x)	__STRING(x)
 #define	___CONCAT(x,y)	__CONCAT(x,y)
 
-#if __STDC__ || defined(__cplusplus)
+#if defined(__STDC__) || defined(__cplusplus)
 #define	__P(protos)	protos		/* full-blown ANSI C */
 #define	__CONCAT(x,y)	x ## y
 #define	__STRING(x)	#x
@@ -502,5 +502,6 @@
 #endif
 
 #define  __BIONIC__   1
+#include <android/api-level.h>
 
 #endif /* !_SYS_CDEFS_H_ */

@@ -17,7 +17,7 @@
 #ifndef HW_EMULATOR_CAMERA_EMULATED_CAMERA_FACTORY_H
 #define HW_EMULATOR_CAMERA_EMULATED_CAMERA_FACTORY_H
 
-#include "EmulatedCamera.h"
+#include "EmulatedBaseCamera.h"
 #include "QemuClient.h"
 
 namespace android {
@@ -131,8 +131,17 @@ private:
      */
     void createQemuCameras();
 
-    /* Checks if fake camera emulation is on. */
-    bool isFakeCameraEmulationOn();
+    /* Checks if fake camera emulation is on for the camera facing back. */
+    bool isBackFakeCameraEmulationOn();
+
+    /* Gets camera device version number to use for back camera emulation */
+    int getBackCameraHalVersion();
+
+    /* Checks if fake camera emulation is on for the camera facing front. */
+    bool isFrontFakeCameraEmulationOn();
+
+    /* Gets camera device version number to use for front camera emulation */
+    int getFrontCameraHalVersion();
 
     /****************************************************************************
      * Data members.
@@ -143,13 +152,13 @@ private:
     FactoryQemuClient   mQemuClient;
 
     /* Array of cameras available for the emulation. */
-    EmulatedCamera**    mEmulatedCameras;
+    EmulatedBaseCamera**    mEmulatedCameras;
 
-    /* Number of emulated cameras (including the fake one). */
+    /* Number of emulated cameras (including the fake ones). */
     int                 mEmulatedCameraNum;
 
-    /* Fake camera ID. */
-    int                 mFakeCameraID;
+    /* Number of emulated fake cameras. */
+    int                 mFakeCameraNum;
 
     /* Flags whether or not constructor has succeeded. */
     bool                mConstructedOK;

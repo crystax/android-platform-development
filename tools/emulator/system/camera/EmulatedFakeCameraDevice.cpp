@@ -46,11 +46,11 @@ EmulatedFakeCameraDevice::EmulatedFakeCameraDevice(EmulatedFakeCamera* camera_ha
 {
     // Makes the image with the original exposure compensation darker.
     // So the effects of changing the exposure compensation can be seen.
-    mBlackYUV.Y = mBlackYUV.Y / 4;
-    mWhiteYUV.Y = mWhiteYUV.Y / 4;
-    mRedYUV.Y = mRedYUV.Y / 4;
-    mGreenYUV.Y = mGreenYUV.Y / 4;
-    mBlueYUV.Y = mBlueYUV.Y / 4;
+    mBlackYUV.Y = mBlackYUV.Y / 2;
+    mWhiteYUV.Y = mWhiteYUV.Y / 2;
+    mRedYUV.Y = mRedYUV.Y / 2;
+    mGreenYUV.Y = mGreenYUV.Y / 2;
+    mBlueYUV.Y = mBlueYUV.Y / 2;
 }
 
 EmulatedFakeCameraDevice::~EmulatedFakeCameraDevice()
@@ -63,15 +63,15 @@ EmulatedFakeCameraDevice::~EmulatedFakeCameraDevice()
 
 status_t EmulatedFakeCameraDevice::connectDevice()
 {
-    LOGV("%s", __FUNCTION__);
+    ALOGV("%s", __FUNCTION__);
 
     Mutex::Autolock locker(&mObjectLock);
     if (!isInitialized()) {
-        LOGE("%s: Fake camera device is not initialized.", __FUNCTION__);
+        ALOGE("%s: Fake camera device is not initialized.", __FUNCTION__);
         return EINVAL;
     }
     if (isConnected()) {
-        LOGW("%s: Fake camera device is already connected.", __FUNCTION__);
+        ALOGW("%s: Fake camera device is already connected.", __FUNCTION__);
         return NO_ERROR;
     }
 
@@ -83,15 +83,15 @@ status_t EmulatedFakeCameraDevice::connectDevice()
 
 status_t EmulatedFakeCameraDevice::disconnectDevice()
 {
-    LOGV("%s", __FUNCTION__);
+    ALOGV("%s", __FUNCTION__);
 
     Mutex::Autolock locker(&mObjectLock);
     if (!isConnected()) {
-        LOGW("%s: Fake camera device is already disconnected.", __FUNCTION__);
+        ALOGW("%s: Fake camera device is already disconnected.", __FUNCTION__);
         return NO_ERROR;
     }
     if (isStarted()) {
-        LOGE("%s: Cannot disconnect from the started device.", __FUNCTION__);
+        ALOGE("%s: Cannot disconnect from the started device.", __FUNCTION__);
         return EINVAL;
     }
 
@@ -105,15 +105,15 @@ status_t EmulatedFakeCameraDevice::startDevice(int width,
                                                int height,
                                                uint32_t pix_fmt)
 {
-    LOGV("%s", __FUNCTION__);
+    ALOGV("%s", __FUNCTION__);
 
     Mutex::Autolock locker(&mObjectLock);
     if (!isConnected()) {
-        LOGE("%s: Fake camera device is not connected.", __FUNCTION__);
+        ALOGE("%s: Fake camera device is not connected.", __FUNCTION__);
         return EINVAL;
     }
     if (isStarted()) {
-        LOGE("%s: Fake camera device is already started.", __FUNCTION__);
+        ALOGE("%s: Fake camera device is already started.", __FUNCTION__);
         return EINVAL;
     }
 
@@ -154,7 +154,7 @@ status_t EmulatedFakeCameraDevice::startDevice(int width,
                 break;
 
             default:
-                LOGE("%s: Unknown pixel format %.4s", __FUNCTION__,
+                ALOGE("%s: Unknown pixel format %.4s", __FUNCTION__,
                      reinterpret_cast<const char*>(&mPixelFormat));
                 return EINVAL;
         }
@@ -162,7 +162,7 @@ status_t EmulatedFakeCameraDevice::startDevice(int width,
         mUVInRow = (width / 2) * mUVStep;
         mState = ECDS_STARTED;
     } else {
-        LOGE("%s: commonStartDevice failed", __FUNCTION__);
+        ALOGE("%s: commonStartDevice failed", __FUNCTION__);
     }
 
     return res;
@@ -170,11 +170,11 @@ status_t EmulatedFakeCameraDevice::startDevice(int width,
 
 status_t EmulatedFakeCameraDevice::stopDevice()
 {
-    LOGV("%s", __FUNCTION__);
+    ALOGV("%s", __FUNCTION__);
 
     Mutex::Autolock locker(&mObjectLock);
     if (!isStarted()) {
-        LOGW("%s: Fake camera device is not started.", __FUNCTION__);
+        ALOGW("%s: Fake camera device is not started.", __FUNCTION__);
         return NO_ERROR;
     }
 
@@ -195,7 +195,7 @@ bool EmulatedFakeCameraDevice::inWorkerThread()
     WorkerThread::SelectRes res =
         getWorkerThread()->Select(-1, 1000000 / mEmulatedFPS);
     if (res == WorkerThread::EXIT_THREAD) {
-        LOGV("%s: Worker thread has been terminated.", __FUNCTION__);
+        ALOGV("%s: Worker thread has been terminated.", __FUNCTION__);
         return false;
     }
 
@@ -256,6 +256,9 @@ void EmulatedFakeCameraDevice::drawCheckerboard()
     uint8_t* U = U_pos;
     uint8_t* V = V_pos;
 
+    YUVPixel adjustedWhite = YUVPixel(mWhiteYUV);
+    changeWhiteBalance(adjustedWhite.Y, adjustedWhite.U, adjustedWhite.V);
+
     for(int y = 0; y < mFrameHeight; y++) {
         int countx = checkxremainder;
         bool current = black;
@@ -263,7 +266,7 @@ void EmulatedFakeCameraDevice::drawCheckerboard()
             if (current) {
                 mBlackYUV.get(Y, U, V);
             } else {
-                mWhiteYUV.get(Y, U, V);
+                adjustedWhite.get(Y, U, V);
             }
             *Y = changeExposure(*Y);
             Y[1] = *Y;
@@ -309,6 +312,9 @@ void EmulatedFakeCameraDevice::drawSquare(int x,
     const int square_ystop = min(mFrameHeight, y + size);
     uint8_t* Y_pos = mCurrentFrame + y * mFrameWidth + x;
 
+    YUVPixel adjustedColor = *color;
+    changeWhiteBalance(adjustedColor.Y, adjustedColor.U, adjustedColor.V);
+
     // Draw the square.
     for (; y < square_ystop; y++) {
         const int iUV = (y / 2) * mUVInRow + (x / 2) * mUVStep;
@@ -316,7 +322,7 @@ void EmulatedFakeCameraDevice::drawSquare(int x,
         uint8_t* sqV = mFrameV + iUV;
         uint8_t* sqY = Y_pos;
         for (int i = x; i < square_xstop; i += 2) {
-            color->get(sqY, sqU, sqV);
+            adjustedColor.get(sqY, sqU, sqV);
             *sqY = changeExposure(*sqY);
             sqY[1] = *sqY;
             sqY += 2; sqU += mUVStep; sqV += mUVStep;
@@ -329,8 +335,11 @@ void EmulatedFakeCameraDevice::drawSquare(int x,
 
 void EmulatedFakeCameraDevice::drawSolid(YUVPixel* color)
 {
+    YUVPixel adjustedColor = *color;
+    changeWhiteBalance(adjustedColor.Y, adjustedColor.U, adjustedColor.V);
+
     /* All Ys are the same. */
-    memset(mCurrentFrame, changeExposure(color->Y), mTotalPixels);
+    memset(mCurrentFrame, changeExposure(adjustedColor.Y), mTotalPixels);
 
     /* Fill U, and V panes. */
     uint8_t* U = mFrameU;
@@ -364,6 +373,7 @@ void EmulatedFakeCameraDevice::drawStripes()
             /* And the blue stripe at the bottom. */
             color = &mBlueYUV;
         }
+        changeWhiteBalance(color->Y, color->U, color->V);
 
         /* All Ys at the row are the same. */
         memset(pY, changeExposure(color->Y), mFrameWidth);
@@ -389,26 +399,26 @@ int EmulatedFakeCameraDevice::rotateFrame()
             mCurrentFrameType = 0;
         }
         if (mCurrentFrameType == 2) {
-            LOGD("********** Rotated to the SOLID COLOR frame **********");
+            ALOGD("********** Rotated to the SOLID COLOR frame **********");
             /* Solid color: lets rotate color too. */
             if (mCurrentColor == &mWhiteYUV) {
-                LOGD("----- Painting a solid RED frame -----");
+                ALOGD("----- Painting a solid RED frame -----");
                 mCurrentColor = &mRedYUV;
             } else if (mCurrentColor == &mRedYUV) {
-                LOGD("----- Painting a solid GREEN frame -----");
+                ALOGD("----- Painting a solid GREEN frame -----");
                 mCurrentColor = &mGreenYUV;
             } else if (mCurrentColor == &mGreenYUV) {
-                LOGD("----- Painting a solid BLUE frame -----");
+                ALOGD("----- Painting a solid BLUE frame -----");
                 mCurrentColor = &mBlueYUV;
             } else {
                 /* Back to white. */
-                LOGD("----- Painting a solid WHITE frame -----");
+                ALOGD("----- Painting a solid WHITE frame -----");
                 mCurrentColor = &mWhiteYUV;
             }
         } else if (mCurrentFrameType == 0) {
-            LOGD("********** Rotated to the CHECKERBOARD frame **********");
-        } else {
-            LOGD("********** Rotated to the STRIPED frame **********");
+            ALOGD("********** Rotated to the CHECKERBOARD frame **********");
+        } else if (mCurrentFrameType == 1) {
+            ALOGD("********** Rotated to the STRIPED frame **********");
         }
     }
 

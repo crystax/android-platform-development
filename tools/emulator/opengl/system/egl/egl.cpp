@@ -13,6 +13,7 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
+
 #include "HostConnection.h"
 #include "ThreadInfo.h"
 #include "eglDisplay.h"
@@ -29,7 +30,7 @@
 #include "GL2Encoder.h"
 #endif
 
-#include <private/ui/android_natives_priv.h>
+#include <system/window.h>
 
 template<typename T>
 static T setErrorFunc(GLint error, T returnValue) {
@@ -65,12 +66,12 @@ const char *  eglStrError(EGLint err)
 
 #define setErrorReturn(error, retVal)     \
     {                                                \
-        LOGE("tid %d: %s(%d): error 0x%x (%s)", gettid(), __FUNCTION__, __LINE__, error, eglStrError(error));     \
+        ALOGE("tid %d: %s(%d): error 0x%x (%s)", gettid(), __FUNCTION__, __LINE__, error, eglStrError(error));     \
         return setErrorFunc(error, retVal);            \
     }
 
 #define RETURN_ERROR(ret,err)           \
-    LOGE("tid %d: %s(%d): error 0x%x (%s)", gettid(), __FUNCTION__, __LINE__, err, eglStrError(err));    \
+    ALOGE("tid %d: %s(%d): error 0x%x (%s)", gettid(), __FUNCTION__, __LINE__, err, eglStrError(err));    \
     getEGLThreadInfo()->eglError = err;    \
     return ret;
 
@@ -107,12 +108,12 @@ const char *  eglStrError(EGLint err)
 #define DEFINE_AND_VALIDATE_HOST_CONNECTION(ret) \
     HostConnection *hostCon = HostConnection::get(); \
     if (!hostCon) { \
-        LOGE("egl: Failed to get host connection\n"); \
+        ALOGE("egl: Failed to get host connection\n"); \
         return ret; \
     } \
     renderControl_encoder_context_t *rcEnc = hostCon->rcEncoder(); \
     if (!rcEnc) { \
-        LOGE("egl: Failed to get renderControl encoder context\n"); \
+        ALOGE("egl: Failed to get renderControl encoder context\n"); \
         return ret; \
     }
 
@@ -124,8 +125,6 @@ const char *  eglStrError(EGLint err)
 #define VALIDATE_SURFACE_RETURN(surface, ret)    \
     if (surface != EGL_NO_SURFACE) {    \
         egl_surface_t* s( static_cast<egl_surface_t*>(surface) );    \
-        if (!s->isValid())    \
-            setErrorReturn(EGL_BAD_SURFACE, EGL_FALSE);    \
         if (s->dpy != (EGLDisplay)&s_display)    \
             setErrorReturn(EGL_BAD_DISPLAY, EGL_FALSE);    \
     }
@@ -175,48 +174,39 @@ struct egl_surface_t {
     egl_surface_t(EGLDisplay dpy, EGLConfig config, EGLint surfaceType);
     virtual     ~egl_surface_t();
 
-    virtual     EGLBoolean         rcCreate() = 0;
-    virtual     EGLBoolean         rcDestroy() = 0;
+    virtual     void        setSwapInterval(int interval) = 0;
+    virtual     EGLBoolean  swapBuffers() = 0;
 
-    virtual     EGLBoolean  connect() { return EGL_TRUE; }
-    virtual     void        disconnect() {}
-    virtual     EGLBoolean     swapBuffers() { return EGL_TRUE; }
-    virtual     EGLint        getSwapBehavior() const;
+    EGLint      getSwapBehavior() const;
+    uint32_t    getRcSurface()   { return rcSurface; }
+    EGLint      getSurfaceType() { return surfaceType; }
 
-    void         setRcSurface(uint32_t handle){ rcSurface = handle; }
-    uint32_t     getRcSurface(){ return rcSurface; }
-
-    virtual     EGLBoolean    isValid(){ return valid; }
-    EGLint        getSurfaceType(){ return surfaceType; }
-
-    void        setWidth(EGLint w){ width = w; }
     EGLint      getWidth(){ return width; }
-    void         setHeight(EGLint h){ height = h; }
     EGLint      getHeight(){ return height; }
-    void        setTextureFormat(EGLint _texFormat){ texFormat = _texFormat; }
-    EGLint        getTextureFormat(){ return texFormat; }
-    void         setTextureTarget(EGLint _texTarget){ texTarget = _texTarget; }
-    EGLint        getTextureTarget(){ return texTarget; }
+    void        setTextureFormat(EGLint _texFormat) { texFormat = _texFormat; }
+    EGLint      getTextureFormat() { return texFormat; }
+    void        setTextureTarget(EGLint _texTarget) { texTarget = _texTarget; }
+    EGLint      getTextureTarget() { return texTarget; }
 
 private:
     //
     //Surface attributes
     //
-    EGLint     width;
-    EGLint     height;
-    EGLint    texFormat;
-    EGLint    texTarget;
+    EGLint      width;
+    EGLint      height;
+    EGLint      texFormat;
+    EGLint      texTarget;
 
 protected:
-    EGLint        surfaceType;
-    EGLBoolean    valid;
-    uint32_t     rcSurface; //handle to surface created via remote control
+    void        setWidth(EGLint w)  { width = w;  }
+    void        setHeight(EGLint h) { height = h; }
 
-
+    EGLint      surfaceType;
+    uint32_t    rcSurface; //handle to surface created via remote control
 };
 
 egl_surface_t::egl_surface_t(EGLDisplay dpy, EGLConfig config, EGLint surfaceType)
-    : dpy(dpy), config(config), surfaceType(surfaceType), valid(EGL_FALSE), rcSurface(0)
+    : dpy(dpy), config(config), surfaceType(surfaceType), rcSurface(0)
 {
     width = 0;
     height = 0;
@@ -225,7 +215,7 @@ egl_surface_t::egl_surface_t(EGLDisplay dpy, EGLConfig config, EGLint surfaceTyp
 }
 
 EGLint egl_surface_t::getSwapBehavior() const {
-        return EGL_BUFFER_PRESERVED;
+    return EGL_BUFFER_PRESERVED;
 }
 
 egl_surface_t::~egl_surface_t()
@@ -236,31 +226,29 @@ egl_surface_t::~egl_surface_t()
 // egl_window_surface_t
 
 struct egl_window_surface_t : public egl_surface_t {
-
-    egl_window_surface_t(
+    static egl_window_surface_t* create(
             EGLDisplay dpy, EGLConfig config, EGLint surfType,
             ANativeWindow* window);
 
-    ~egl_window_surface_t();
+    virtual ~egl_window_surface_t();
 
-    virtual     EGLBoolean     rcCreate();
-    virtual     EGLBoolean     rcDestroy();
-
-    virtual     EGLBoolean  connect();
-    virtual     void        disconnect();
-    virtual     EGLBoolean  swapBuffers();
+    virtual void       setSwapInterval(int interval);
+    virtual EGLBoolean swapBuffers();
 
 private:
-    ANativeWindow*     nativeWindow;
-    android_native_buffer_t*   buffer;
+    egl_window_surface_t(
+            EGLDisplay dpy, EGLConfig config, EGLint surfType,
+            ANativeWindow* window);
+    EGLBoolean init();
 
+    ANativeWindow*              nativeWindow;
+    android_native_buffer_t*    buffer;
 };
 
-
 egl_window_surface_t::egl_window_surface_t (
-            EGLDisplay dpy, EGLConfig config, EGLint surfType,
-            ANativeWindow* window)
-    : egl_surface_t(dpy, config, surfType),
+        EGLDisplay dpy, EGLConfig config, EGLint surfType,
+        ANativeWindow* window)
+:   egl_surface_t(dpy, config, surfType),
     nativeWindow(window),
     buffer(NULL)
 {
@@ -273,82 +261,70 @@ egl_window_surface_t::egl_window_surface_t (
     setHeight(h);
 }
 
-egl_window_surface_t::~egl_window_surface_t() {
-    nativeWindow->common.decRef(&nativeWindow->common);
-}
-
-EGLBoolean egl_window_surface_t::rcCreate()
+EGLBoolean egl_window_surface_t::init()
 {
-    DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
-    rcSurface = rcEnc->rcCreateWindowSurface(rcEnc, (uint32_t)config, getWidth(), getHeight());
-    if (!rcSurface) {
-        LOGE("rcCreateWindowSurface returned 0");
-        return EGL_FALSE;
-    }
-    valid = EGL_TRUE;
-    return EGL_TRUE;
-}
-
-EGLBoolean egl_window_surface_t::rcDestroy()
-{
-    if (!rcSurface) {
-        LOGE("rcDestroy called on invalid rcSurface");
-        return EGL_FALSE;
-    }
-
-    DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
-    rcEnc->rcDestroyWindowSurface(rcEnc, rcSurface);
-    rcSurface = 0;
-
-    return EGL_TRUE;
-}
-
-EGLBoolean egl_window_surface_t::connect()
-{
-    // dequeue a buffer
     if (nativeWindow->dequeueBuffer(nativeWindow, &buffer) != NO_ERROR) {
         setErrorReturn(EGL_BAD_ALLOC, EGL_FALSE);
     }
-
-    // lock the buffer
     nativeWindow->lockBuffer(nativeWindow, buffer);
 
     DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
-    rcEnc->rcSetWindowColorBuffer(rcEnc, rcSurface, ((cb_handle_t *)(buffer->handle))->hostHandle);
+    rcSurface = rcEnc->rcCreateWindowSurface(rcEnc, (uint32_t)config,
+            getWidth(), getHeight());
+    if (!rcSurface) {
+        ALOGE("rcCreateWindowSurface returned 0");
+        return EGL_FALSE;
+    }
+    rcEnc->rcSetWindowColorBuffer(rcEnc, rcSurface,
+            ((cb_handle_t*)(buffer->handle))->hostHandle);
 
     return EGL_TRUE;
 }
 
-void egl_window_surface_t::disconnect()
+egl_window_surface_t* egl_window_surface_t::create(
+        EGLDisplay dpy, EGLConfig config, EGLint surfType,
+        ANativeWindow* window)
 {
-    if (buffer) {
-        nativeWindow->queueBuffer(nativeWindow, buffer);
-        buffer = 0;
+    egl_window_surface_t* wnd = new egl_window_surface_t(
+            dpy, config, surfType, window);
+    if (wnd && !wnd->init()) {
+        delete wnd;
+        wnd = NULL;
     }
+    return wnd;
+}
+
+egl_window_surface_t::~egl_window_surface_t() {
+    DEFINE_HOST_CONNECTION;
+    if (rcSurface && rcEnc) {
+        rcEnc->rcDestroyWindowSurface(rcEnc, rcSurface);
+    }
+    if (buffer) {
+        nativeWindow->cancelBuffer(nativeWindow, buffer);
+    }
+    nativeWindow->common.decRef(&nativeWindow->common);
+}
+
+void egl_window_surface_t::setSwapInterval(int interval)
+{
+    nativeWindow->setSwapInterval(nativeWindow, interval);
 }
 
 EGLBoolean egl_window_surface_t::swapBuffers()
 {
-    if (!buffer) {
-        setErrorReturn(EGL_BAD_ACCESS, EGL_FALSE);
-    }
-
     DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
 
     rcEnc->rcFlushWindowColorBuffer(rcEnc, rcSurface);
 
-    //post the back buffer
     nativeWindow->queueBuffer(nativeWindow, buffer);
-
-    // dequeue a new buffer
     if (nativeWindow->dequeueBuffer(nativeWindow, &buffer)) {
+        buffer = NULL;
         setErrorReturn(EGL_BAD_ALLOC, EGL_FALSE);
     }
-
-    // lock the buffer
     nativeWindow->lockBuffer(nativeWindow, buffer);
 
-    rcEnc->rcSetWindowColorBuffer(rcEnc, rcSurface, ((cb_handle_t *)(buffer->handle))->hostHandle);
+    rcEnc->rcSetWindowColorBuffer(rcEnc, rcSurface,
+            ((cb_handle_t *)(buffer->handle))->hostHandle);
 
     return EGL_TRUE;
 }
@@ -357,29 +333,28 @@ EGLBoolean egl_window_surface_t::swapBuffers()
 //egl_pbuffer_surface_t
 
 struct egl_pbuffer_surface_t : public egl_surface_t {
-
-    GLenum    format;
-
-    egl_pbuffer_surface_t(
-            EGLDisplay dpy, EGLConfig config, EGLint surfType,
-            int32_t w, int32_t h, GLenum format);
+    static egl_pbuffer_surface_t* create(EGLDisplay dpy, EGLConfig config,
+            EGLint surfType, int32_t w, int32_t h, GLenum pixelFormat);
 
     virtual ~egl_pbuffer_surface_t();
-    virtual     EGLBoolean     rcCreate();
-    virtual     EGLBoolean     rcDestroy();
 
-    virtual     EGLBoolean    connect();
+    virtual void       setSwapInterval(int interval) {}
+    virtual EGLBoolean swapBuffers() { return EGL_TRUE; }
 
-    uint32_t    getRcColorBuffer(){ return rcColorBuffer; }
-    void         setRcColorBuffer(uint32_t colorBuffer){ rcColorBuffer = colorBuffer; }
+    uint32_t getRcColorBuffer() { return rcColorBuffer; }
+
 private:
+    egl_pbuffer_surface_t(EGLDisplay dpy, EGLConfig config, EGLint surfType,
+            int32_t w, int32_t h);
+    EGLBoolean init(GLenum format);
+
     uint32_t rcColorBuffer;
 };
 
-egl_pbuffer_surface_t::egl_pbuffer_surface_t(
-        EGLDisplay dpy, EGLConfig config, EGLint surfType,
-        int32_t w, int32_t h, GLenum pixelFormat)
-    : egl_surface_t(dpy, config, surfType), format(pixelFormat)
+egl_pbuffer_surface_t::egl_pbuffer_surface_t(EGLDisplay dpy, EGLConfig config,
+        EGLint surfType, int32_t w, int32_t h)
+:   egl_surface_t(dpy, config, surfType),
+    rcColorBuffer(0)
 {
     setWidth(w);
     setHeight(h);
@@ -387,48 +362,47 @@ egl_pbuffer_surface_t::egl_pbuffer_surface_t(
 
 egl_pbuffer_surface_t::~egl_pbuffer_surface_t()
 {
-    rcColorBuffer = 0;
+    DEFINE_HOST_CONNECTION;
+    if (rcEnc) {
+        if (rcColorBuffer) rcEnc->rcCloseColorBuffer(rcEnc, rcColorBuffer);
+        if (rcSurface)     rcEnc->rcDestroyWindowSurface(rcEnc, rcSurface);
+    }
 }
 
-EGLBoolean egl_pbuffer_surface_t::rcCreate()
+EGLBoolean egl_pbuffer_surface_t::init(GLenum pixelFormat)
 {
     DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
-    rcSurface = rcEnc->rcCreateWindowSurface(rcEnc, (uint32_t)config, getWidth(), getHeight());
+
+    rcSurface = rcEnc->rcCreateWindowSurface(rcEnc, (uint32_t)config,
+            getWidth(), getHeight());
     if (!rcSurface) {
-        LOGE("rcCreateWindowSurface returned 0");
+        ALOGE("rcCreateWindowSurface returned 0");
         return EGL_FALSE;
     }
-    rcColorBuffer = rcEnc->rcCreateColorBuffer(rcEnc, getWidth(), getHeight(), format);
+
+    rcColorBuffer = rcEnc->rcCreateColorBuffer(rcEnc, getWidth(), getHeight(),
+            pixelFormat);
     if (!rcColorBuffer) {
-        LOGE("rcCreateColorBuffer returned 0");
+        ALOGE("rcCreateColorBuffer returned 0");
         return EGL_FALSE;
     }
 
-    valid = EGL_TRUE;
-    return EGL_TRUE;
-}
-
-EGLBoolean egl_pbuffer_surface_t::rcDestroy()
-{
-    if ((!rcSurface)||(!rcColorBuffer)) {
-        LOGE("destroyRc called on invalid rcSurface");
-        return EGL_FALSE;
-    }
-
-    DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
-    rcEnc->rcDestroyWindowSurface(rcEnc, rcSurface);
-    rcEnc->rcDestroyColorBuffer(rcEnc, rcColorBuffer);
-    rcSurface = 0;
-
-    return EGL_TRUE;
-}
-
-EGLBoolean egl_pbuffer_surface_t::connect()
-{
-    DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
     rcEnc->rcSetWindowColorBuffer(rcEnc, rcSurface, rcColorBuffer);
 
     return EGL_TRUE;
+}
+
+egl_pbuffer_surface_t* egl_pbuffer_surface_t::create(EGLDisplay dpy,
+        EGLConfig config, EGLint surfType, int32_t w, int32_t h,
+        GLenum pixelFormat)
+{
+    egl_pbuffer_surface_t* pb = new egl_pbuffer_surface_t(dpy, config, surfType,
+            w, h);
+    if (pb && !pb->init(pixelFormat)) {
+        delete pb;
+        pb = NULL;
+    }
+    return pb;
 }
 
 static const char *getGLString(int glEnum)
@@ -653,12 +627,9 @@ EGLSurface eglCreateWindowSurface(EGLDisplay dpy, EGLConfig config, EGLNativeWin
         setErrorReturn(EGL_BAD_NATIVE_WINDOW, EGL_NO_SURFACE);
     }
 
-    egl_surface_t* surface;
-    surface = new egl_window_surface_t(&s_display, config, surfaceType, static_cast<ANativeWindow*>(win));
-    if (!surface)
-        setErrorReturn(EGL_BAD_ALLOC, EGL_NO_SURFACE);
-    if (!surface->rcCreate()) {
-        delete surface;
+    egl_surface_t* surface = egl_window_surface_t::create(
+            &s_display, config, surfaceType, static_cast<ANativeWindow*>(win));
+    if (!surface) {
         setErrorReturn(EGL_BAD_ALLOC, EGL_NO_SURFACE);
     }
 
@@ -710,11 +681,9 @@ EGLSurface eglCreatePbufferSurface(EGLDisplay dpy, EGLConfig config, const EGLin
     if (s_display.getConfigGLPixelFormat(config, &pixelFormat) == EGL_FALSE)
         setErrorReturn(EGL_BAD_MATCH, EGL_NO_SURFACE);
 
-    egl_surface_t* surface = new egl_pbuffer_surface_t(dpy, config, surfaceType, w, h, pixelFormat);
-    if (!surface)
-        setErrorReturn(EGL_BAD_ALLOC, EGL_NO_SURFACE);
-    if (!surface->rcCreate()) {
-        delete surface;
+    egl_surface_t* surface = egl_pbuffer_surface_t::create(dpy, config,
+            surfaceType, w, h, pixelFormat);
+    if (!surface) {
         setErrorReturn(EGL_BAD_ALLOC, EGL_NO_SURFACE);
     }
 
@@ -740,10 +709,7 @@ EGLBoolean eglDestroySurface(EGLDisplay dpy, EGLSurface eglSurface)
     VALIDATE_DISPLAY_INIT(dpy, EGL_FALSE);
     VALIDATE_SURFACE_RETURN(eglSurface, EGL_FALSE);
 
-    egl_surface_t* surface( static_cast<egl_surface_t*>(eglSurface) );
-
-    surface->disconnect();
-    surface->rcDestroy();
+    egl_surface_t* surface(static_cast<egl_surface_t*>(eglSurface));
     delete surface;
 
     return EGL_TRUE;
@@ -782,7 +748,7 @@ EGLBoolean eglQuerySurface(EGLDisplay dpy, EGLSurface eglSurface, EGLint attribu
             break;
         //TODO: complete other attributes
         default:
-            LOGE("eglQuerySurface %x  EGL_BAD_ATTRIBUTE", attribute);
+            ALOGE("eglQuerySurface %x  EGL_BAD_ATTRIBUTE", attribute);
             ret = setErrorFunc(EGL_BAD_ATTRIBUTE, EGL_FALSE);
             break;
     }
@@ -819,14 +785,14 @@ EGLBoolean eglReleaseThread()
 EGLSurface eglCreatePbufferFromClientBuffer(EGLDisplay dpy, EGLenum buftype, EGLClientBuffer buffer, EGLConfig config, const EGLint *attrib_list)
 {
     //TODO
-    LOGW("%s not implemented", __FUNCTION__);
+    ALOGW("%s not implemented", __FUNCTION__);
     return 0;
 }
 
 EGLBoolean eglSurfaceAttrib(EGLDisplay dpy, EGLSurface surface, EGLint attribute, EGLint value)
 {
     //TODO
-    LOGW("%s not implemented", __FUNCTION__);
+    ALOGW("%s not implemented", __FUNCTION__);
     return 0;
 }
 
@@ -864,16 +830,27 @@ EGLBoolean eglBindTexImage(EGLDisplay dpy, EGLSurface eglSurface, EGLint buffer)
 EGLBoolean eglReleaseTexImage(EGLDisplay dpy, EGLSurface surface, EGLint buffer)
 {
     //TODO
-    LOGW("%s not implemented", __FUNCTION__);
+    ALOGW("%s not implemented", __FUNCTION__);
     return 0;
 }
 
 EGLBoolean eglSwapInterval(EGLDisplay dpy, EGLint interval)
 {
     VALIDATE_DISPLAY_INIT(dpy, EGL_FALSE);
-
     DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
+
+    EGLContext_t* ctx = getEGLThreadInfo()->currentContext;
+    if (!ctx) {
+        setErrorReturn(EGL_BAD_CONTEXT, EGL_FALSE);
+    }
+    if (!ctx->draw) {
+        setErrorReturn(EGL_BAD_SURFACE, EGL_FALSE);
+    }
+    egl_surface_t* draw(static_cast<egl_surface_t*>(ctx->draw));
+    draw->setSwapInterval(interval);
+
     rcEnc->rcFBSetSwapInterval(rcEnc, interval); //TODO: implement on the host
+
     return EGL_TRUE;
 }
 
@@ -900,7 +877,7 @@ EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config, EGLContext share_c
     DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_NO_CONTEXT);
     uint32_t rcContext = rcEnc->rcCreateContext(rcEnc, (uint32_t)config, rcShareCtx, version);
     if (!rcContext) {
-        LOGE("rcCreateContext returned 0");
+        ALOGE("rcCreateContext returned 0");
         setErrorReturn(EGL_BAD_ALLOC, EGL_NO_CONTEXT);
     }
 
@@ -972,16 +949,8 @@ EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLC
 
     DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
     if (rcEnc->rcMakeCurrent(rcEnc, ctxHandle, drawHandle, readHandle) == EGL_FALSE) {
-        LOGE("rcMakeCurrent returned EGL_FALSE");
+        ALOGE("rcMakeCurrent returned EGL_FALSE");
         setErrorReturn(EGL_BAD_CONTEXT, EGL_FALSE);
-    }
-
-    //
-    // Disconnect from the previous drawable
-    //
-    if (tInfo->currentContext && tInfo->currentContext->draw) {
-        egl_surface_t * prevDrawSurf = static_cast<egl_surface_t *>(tInfo->currentContext->draw);
-        prevDrawSurf->disconnect();
     }
 
     //Now make the local bind
@@ -1035,10 +1004,6 @@ EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLC
             }
         }
     }
-
-    //connect the color buffer
-    if (drawSurf)
-        drawSurf->connect();
 
     return EGL_TRUE;
 }
@@ -1098,7 +1063,7 @@ EGLBoolean eglQueryContext(EGLDisplay dpy, EGLContext ctx, EGLint attribute, EGL
                 *value = EGL_BACK_BUFFER; //single buffer not supported
             break;
         default:
-            LOGE("eglQueryContext %x  EGL_BAD_ATTRIBUTE", attribute);
+            ALOGE("eglQueryContext %x  EGL_BAD_ATTRIBUTE", attribute);
             setErrorReturn(EGL_BAD_ATTRIBUTE, EGL_FALSE);
             break;
     }
@@ -1137,8 +1102,6 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface eglSurface)
     DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
 
     egl_surface_t* d = static_cast<egl_surface_t*>(eglSurface);
-    if (!d->isValid())
-        setErrorReturn(EGL_BAD_SURFACE, EGL_FALSE);
     if (d->dpy != dpy)
         setErrorReturn(EGL_BAD_DISPLAY, EGL_FALSE);
 
@@ -1218,32 +1181,74 @@ EGLBoolean eglDestroyImageKHR(EGLDisplay dpy, EGLImageKHR img)
     return EGL_TRUE;
 }
 
-EGLSyncKHR eglCreateSyncKHR(EGLDisplay dpy, EGLenum type, const EGLint *attrib_list)
+#define FENCE_SYNC_HANDLE (EGLSyncKHR)0xFE4CE
+
+EGLSyncKHR eglCreateSyncKHR(EGLDisplay dpy, EGLenum type,
+        const EGLint *attrib_list)
 {
-    //TODO later
-    return 0;
+    // TODO: This implementation could be faster. We should require the host EGL
+    // to support KHR_fence_sync, or at least pipe the fence command to the host
+    // and wait for it (probably involving a glFinish on the host) in
+    // eglClientWaitSyncKHR.
+
+    VALIDATE_DISPLAY(dpy, EGL_NO_SYNC_KHR);
+
+    if (type != EGL_SYNC_FENCE_KHR ||
+            (attrib_list != NULL && attrib_list[0] != EGL_NONE)) {
+        setErrorReturn(EGL_BAD_ATTRIBUTE, EGL_NO_SYNC_KHR);
+    }
+
+    EGLThreadInfo *tInfo = getEGLThreadInfo();
+    if (!tInfo || !tInfo->currentContext) {
+        setErrorReturn(EGL_BAD_MATCH, EGL_NO_SYNC_KHR);
+    }
+
+    if (tInfo->currentContext->version == 2) {
+        s_display.gles2_iface()->finish();
+    } else {
+        s_display.gles_iface()->finish();
+    }
+
+    return FENCE_SYNC_HANDLE;
 }
 
 EGLBoolean eglDestroySyncKHR(EGLDisplay dpy, EGLSyncKHR sync)
 {
-    //TODO later
-    return 0;
+    if (sync != FENCE_SYNC_HANDLE) {
+        setErrorReturn(EGL_BAD_PARAMETER, EGL_FALSE);
+    }
+
+    return EGL_TRUE;
 }
 
-EGLint eglClientWaitSyncKHR(EGLDisplay dpy, EGLSyncKHR sync, EGLint flags, EGLTimeKHR timeout)
+EGLint eglClientWaitSyncKHR(EGLDisplay dpy, EGLSyncKHR sync, EGLint flags,
+        EGLTimeKHR timeout)
 {
-    //TODO
-    return 0;
+    if (sync != FENCE_SYNC_HANDLE) {
+        setErrorReturn(EGL_BAD_PARAMETER, EGL_FALSE);
+    }
+
+    return EGL_CONDITION_SATISFIED_KHR;
 }
 
-EGLBoolean eglSignalSyncKHR(EGLDisplay dpy, EGLSyncKHR sync, EGLenum mode)
+EGLBoolean eglGetSyncAttribKHR(EGLDisplay dpy, EGLSyncKHR sync,
+        EGLint attribute, EGLint *value)
 {
-    //TODO later
-    return 0;
-}
+    if (sync != FENCE_SYNC_HANDLE) {
+        setErrorReturn(EGL_BAD_PARAMETER, EGL_FALSE);
+    }
 
-EGLBoolean eglGetSyncAttribKHR(EGLDisplay dpy, EGLSyncKHR sync, EGLint attribute, EGLint *value)
-{
-    //TODO later
-    return 0;
+    switch (attribute) {
+    case EGL_SYNC_TYPE_KHR:
+        *value = EGL_SYNC_FENCE_KHR;
+        return EGL_TRUE;
+    case EGL_SYNC_STATUS_KHR:
+        *value = EGL_SIGNALED_KHR;
+        return EGL_TRUE;
+    case EGL_SYNC_CONDITION_KHR:
+        *value = EGL_SYNC_PRIOR_COMMANDS_COMPLETE_KHR;
+        return EGL_TRUE;
+    default:
+        setErrorReturn(EGL_BAD_ATTRIBUTE, EGL_FALSE);
+    }
 }

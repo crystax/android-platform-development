@@ -68,7 +68,7 @@ See test_defs.xsd for more information.
     continuous="true" />
 
 <test name="frameworks-telephony"
-    build_path="frameworks/base/telephony/tests/telephonytests"
+    build_path="frameworks/opt/telephony/tests/telephonytests"
     package="com.android.frameworks.telephonytests"
     coverage_target="framework"
     continuous="true" />
@@ -94,7 +94,6 @@ See test_defs.xsd for more information.
 <test name="keystore-unit"
     build_path="frameworks/base/keystore/tests"
     package="android.security.tests"
-    runner=".KeyStoreTestRunner"
     coverage_target="framework"
     continuous="true" />
 
@@ -124,17 +123,22 @@ See test_defs.xsd for more information.
     continuous="true"
     description="Framework variable speed audio tests" />
 
-<test-native name="libui"
-    build_path="frameworks/base/libs/ui/tests"
-    description="Framework libui unit tests." />
+<test-native name="libandroidfw"
+    build_path="frameworks/base/libs/androidfw/tests"
+    description="Framework libandroidfw unit tests." />
 
 <test-native name="libutils"
-    build_path="frameworks/base/libs/utils/tests"
+    build_path="frameworks/native/libs/utils/tests"
     description="Framework libutils unit tests." />
 
 <test-native name="libinput"
     build_path="frameworks/base/services/input/tests"
     description="Framework libinput unit tests." />
+
+<test name="volley"
+    build_path="frameworks/support/volley/tests"
+    package="com.android.volley.tests"
+    continuous="true" />
 
 <!--  end of framework tests -->
 
@@ -253,12 +257,6 @@ See test_defs.xsd for more information.
     package="android.tests.sigtest.tests"
     suite="cts" />
 
-<test name="cts-apidemos"
-    build_path="cts/tests/ApiDemosReferenceTest"
-    package="android.apidemos.cts"
-    coverage_target="ApiDemos"
-    suite="cts" />
-
 <test name="cts-app"
     build_path="cts/tests/tests/app"
     package="com.android.cts.app"
@@ -319,7 +317,7 @@ See test_defs.xsd for more information.
 <test name="cts-net"
     build_path="cts/tests/tests/net"
     package="com.android.cts.net"
-    runner="android.test.InstrumentationCtsTestRunner"
+    runner="android.test.InstrumentationTestRunner"
     coverage_target="framework"
     suite="cts" />
 
@@ -328,36 +326,6 @@ See test_defs.xsd for more information.
     package="com.android.cts.os"
     runner="android.test.InstrumentationCtsTestRunner"
     coverage_target="framework"
-    suite="cts" />
-
-<test name="cts-perf1"
-    build_path="cts/tests/tests/performance"
-    package="com.android.cts.performance"
-    runner="android.test.InstrumentationCtsTestRunner"
-    suite="cts" />
-
-<test name="cts-perf2"
-    build_path="cts/tests/tests/performance2"
-    package="com.android.cts.performance2"
-    runner="android.test.InstrumentationCtsTestRunner"
-    suite="cts" />
-
-<test name="cts-perf3"
-    build_path="cts/tests/tests/performance3"
-    package="com.android.cts.performance3"
-    runner="android.test.InstrumentationCtsTestRunner"
-    suite="cts" />
-
-<test name="cts-perf4"
-    build_path="cts/tests/tests/performance4"
-    package="com.android.cts.performance4"
-    runner="android.test.InstrumentationCtsTestRunner"
-    suite="cts" />
-
-<test name="cts-perf5"
-    build_path="cts/tests/tests/performance5"
-    package="com.android.cts.performance5"
-    runner="android.test.InstrumentationCtsTestRunner"
     suite="cts" />
 
 <test name="cts-provider"
@@ -444,6 +412,14 @@ See test_defs.xsd for more information.
     build_path="packages/providers/CalendarProvider"
     package="com.android.providers.calendar.tests"
     coverage_target="CalendarProvider"
+    continuous="true" />
+
+<test name="camera-functional"
+    build_path="packages/apps/Camera"
+    package="com.google.android.camera.tests"
+    runner="com.android.camera.CameraTestRunner"
+    coverage_target="Camera"
+    description="Camera functional test"
     continuous="true" />
 
 <test name="contactsprov"
@@ -559,7 +535,7 @@ See test_defs.xsd for more information.
 
 <!-- host java tests -->
 <test-host name="cts-appsecurity"
-    build_path="cts/tests/appsecurity-tests"
+    build_path="cts/hostsidetests/appsecurity"
     class="com.android.cts.appsecurity.AppSecurityTests"
     jar_name="CtsAppSecurityTests.jar"
     suite="cts" />

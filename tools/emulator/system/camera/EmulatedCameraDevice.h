@@ -27,7 +27,10 @@
  */
 
 #include <utils/threads.h>
+#include <utils/KeyedVector.h>
+#include <utils/String8.h>
 #include "EmulatedCameraCommon.h"
+#include "Converters.h"
 
 namespace android {
 
@@ -116,6 +119,21 @@ public:
      */
     virtual status_t Initialize();
 
+    /* Initializes the white balance modes parameters.
+     * The parameters are passed by each individual derived camera API to
+     * represent that different camera manufacturers may have different
+     * preferences on the white balance parameters. Green channel in the RGB
+     * color space is fixed to keep the luminance to be reasonably constant.
+     *
+     * Param:
+     * mode the text describing the current white balance mode
+     * r_scale the scale factor for the R channel in RGB space
+     * b_scale the scale factor for the B channel in RGB space.
+     */
+    void initializeWhiteBalanceModes(const char* mode,
+                                     const float r_scale,
+                                     const float b_scale);
+
     /* Starts delivering frames captured from the camera device.
      * This method will start the worker thread that would be pulling frames from
      * the camera device, and will deliver the pulled frames back to the emulated
@@ -145,7 +163,11 @@ public:
 
     /* Sets the exposure compensation for the camera device.
      */
-    virtual void setExposureCompensation(const float ev);
+    void setExposureCompensation(const float ev);
+
+    /* Sets the white balance mode for the device.
+     */
+    void setWhiteBalanceMode(const char* mode);
 
     /* Gets current framebuffer, converted into preview frame format.
      * This method must be called on a connected instance of this class with a
@@ -170,7 +192,7 @@ public:
      */
     inline int getFrameWidth() const
     {
-        LOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
+        ALOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
         return mFrameWidth;
     }
 
@@ -182,7 +204,7 @@ public:
      */
     inline int getFrameHeight() const
     {
-        LOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
+        ALOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
         return mFrameHeight;
     }
 
@@ -193,7 +215,7 @@ public:
      */
     inline size_t getFrameBufferSize() const
     {
-        LOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
+        ALOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
         return mFrameBufferSize;
     }
 
@@ -204,7 +226,7 @@ public:
      */
     inline int getPixelNum() const
     {
-        LOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
+        ALOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
         return mTotalPixels;
     }
 
@@ -230,7 +252,7 @@ public:
      */
     inline uint32_t getOriginalPixelFormat() const
     {
-        LOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
+        ALOGE_IF(!isStarted(), "%s: Device is not started", __FUNCTION__);
         return mPixelFormat;
     }
 
@@ -268,6 +290,24 @@ protected:
      * This method will undo what commonStartDevice had done.
      */
     virtual void commonStopDevice();
+
+    /** Computes a luminance value after taking the exposure compensation.
+     * value into account.
+     *
+     * Param:
+     * inputY - The input luminance value.
+     * Return:
+     * The luminance value after adjusting the exposure compensation.
+     */
+    inline uint8_t changeExposure(const uint8_t& inputY) const {
+        return static_cast<uint8_t>(clamp(static_cast<float>(inputY) *
+                                    mExposureCompensation));
+    }
+
+    /** Computes the pixel value in YUV space after adjusting to the current
+     * white balance mode.
+     */
+    void changeWhiteBalance(uint8_t& y, uint8_t& u, uint8_t& v) const;
 
     /****************************************************************************
      * Worker thread management.
@@ -332,7 +372,7 @@ protected:
 
             inline ~WorkerThread()
             {
-                LOGW_IF(mThreadControl >= 0 || mControlFD >= 0,
+                ALOGW_IF(mThreadControl >= 0 || mControlFD >= 0,
                         "%s: Control FDs are opened in the destructor",
                         __FUNCTION__);
                 if (mThreadControl >= 0) {
@@ -477,6 +517,10 @@ protected:
 
     /* Exposure compensation value */
     float                       mExposureCompensation;
+
+    float*                      mWhiteBalanceScale;
+
+    DefaultKeyedVector<String8, float*>      mSupportedWhiteBalanceScale;
 
     /* Defines possible states of the emulated camera device object.
      */

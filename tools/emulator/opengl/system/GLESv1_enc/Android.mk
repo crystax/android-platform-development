@@ -7,9 +7,10 @@ LOCAL_CFLAGS += -DLOG_TAG=\"emuglGLESv1_enc\"
 
 LOCAL_SRC_FILES := \
         GLEncoder.cpp \
-        GLEncoderUtils.cpp
-
-$(call emugl-gen-encoder,$(LOCAL_PATH),gl)
+        GLEncoderUtils.cpp \
+        gl_client_context.cpp \
+        gl_enc.cpp \
+        gl_entry.cpp
 
 $(call emugl-import,libOpenglCodecCommon)
 $(call emugl-export,C_INCLUDES,$(LOCAL_PATH))
