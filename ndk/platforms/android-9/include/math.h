@@ -137,10 +137,8 @@ extern const union __nan_un {
     : (sizeof (x) == sizeof (double)) ? __signbit(x)	\
     : __signbitl(x))
 
-#if 0
 typedef	__double_t	double_t;
 typedef	__float_t	float_t;
-#endif 
 /* #endif */ /* __ISO_C_VISIBLE >= 1999 */
 
 /*
