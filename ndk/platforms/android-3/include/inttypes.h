@@ -22,6 +22,9 @@
 #include <stdint.h>
 #include <sys/cdefs.h>
 
+#define __need_wchar_t
+#include <stddef.h>
+
 #if !defined(__cplusplus) || defined(__STDC_FORMAT_MACROS)
 /*
  * 7.8.1 Macros for format specifiers
@@ -256,6 +259,9 @@ uintmax_t	strtoumax(const char *, char **, int);
 
 intmax_t	strntoimax(const char *nptr, char **endptr, int base, size_t n);
 uintmax_t	strntoumax(const char *nptr, char **endptr, int base, size_t n);
+
+intmax_t  wcstoimax(const wchar_t *nptr, wchar_t **endptr, int base);
+uintmax_t wcstoumax(const wchar_t *nptr, wchar_t **endptr, int base);
 __END_DECLS
 
 #endif /* _INTTYPES_H_ */
