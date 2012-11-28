@@ -30,43 +30,53 @@ LOCAL_CFLAGS := -I $(LOCAL_PATH)/common/include
 
 ifeq ($(TARGET_ARCH),mips)
 libportable_arch_src_files += \
+			arch-mips/clone.c \
+			arch-mips/epoll.c \
+			arch-mips/errno.c \
+			arch-mips/fcntl.c \
 			arch-mips/ioctl.c \
 			arch-mips/mmap.c \
-			arch-mips/resource.c \
-			arch-mips/stat.c \
-			arch-mips/statfs.c \
 			arch-mips/open.c \
 			arch-mips/poll.c \
+			arch-mips/pthread.c \
+			arch-mips/resource.c \
+			arch-mips/signal.c \
 			arch-mips/socket.c \
 			arch-mips/sockopt.c \
-			arch-mips/fcntl.c \
-			arch-mips/epoll.c \
-			arch-mips/errno.c
+			arch-mips/stat.c \
+			arch-mips/statfs.c \
+			arch-mips/syscall.c \
+			arch-mips/timer.c \
+			arch-mips/waitpid.c
 endif
 
 ifeq ($(TARGET_ARCH),arm)
 libportable_arch_src_files += \
-			arch-arm/stat.c \
+			arch-arm/epoll.c \
+			arch-arm/errno.c \
 			arch-arm/socket.c \
 			arch-arm/sockopt.c \
-			arch-arm/epoll.c \
-			arch-arm/errno.c
+			arch-arm/stat.c
 endif
 
 ifeq ($(TARGET_ARCH),x86)
 libportable_arch_src_files += \
+			arch-x86/epoll.c \
+			arch-x86/errno.c \
+			arch-x86/fcntl.c \
 			arch-x86/ioctl.c \
-			arch-x86/stat.c \
 			arch-x86/open.c \
 			arch-x86/socket.c \
 			arch-x86/sockopt.c \
-			arch-x86/fcntl.c \
-			arch-x86/epoll.c \
-			arch-x86/errno.c
+			arch-x86/stat.c
 endif
 
 LOCAL_SRC_FILES := \
         $(libportable_common_src_files) \
         $(libportable_arch_src_files)
+
+LOCAL_WHOLE_STATIC_LIBRARIES += cpufeatures
+
+LOCAL_SHARED_LIBRARIES += liblog
 
 include $(BUILD_SHARED_LIBRARY)

@@ -71,6 +71,7 @@ sdk/sdk-build.prop                            platforms/${PLATFORM_NAME}/build.p
 
 # the uper-jar file that apps link against. This is the public API
 ${OUT_DIR}/target/common/obj/PACKAGING/android_jar_intermediates/android.jar platforms/${PLATFORM_NAME}/android.jar
+${OUT_DIR}/target/common/obj/JAVA_LIBRARIES/android_uiautomator_intermediates/javalib.jar           platforms/${PLATFORM_NAME}/uiautomator.jar
 
 # the aidl precompiled include
 obj/framework.aidl platforms/${PLATFORM_NAME}/framework.aidl
@@ -192,6 +193,7 @@ development/samples/TicTacToeLib               samples/${PLATFORM_NAME}/TicTacTo
 development/samples/TicTacToeMain              samples/${PLATFORM_NAME}/TicTacToeMain
 development/samples/TtsEngine                  samples/${PLATFORM_NAME}/TtsEngine
 development/samples/ToyVpn                     samples/${PLATFORM_NAME}/ToyVpn
+development/samples/UiAutomator                samples/${PLATFORM_NAME}/UiAutomator
 development/samples/USB/MissileLauncher        samples/${PLATFORM_NAME}/USB/MissileLauncher
 development/samples/USB/AdbTest                samples/${PLATFORM_NAME}/USB/AdbTest
 development/samples/VoiceRecognitionService    samples/${PLATFORM_NAME}/VoiceRecognitionService

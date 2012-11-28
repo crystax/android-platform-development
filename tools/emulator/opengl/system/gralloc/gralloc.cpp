@@ -133,8 +133,11 @@ static int gralloc_alloc(alloc_device_t* dev,
     D("gralloc_alloc w=%d h=%d usage=0x%x\n", w, h, usage);
 
     gralloc_device_t *grdev = (gralloc_device_t *)dev;
-    if (!grdev || !pHandle || !pStride)
+    if (!grdev || !pHandle || !pStride) {
+        ALOGE("gralloc_alloc: Bad inputs (grdev: %p, pHandle: %p, pStride: %p",
+                grdev, pHandle, pStride);
         return -EINVAL;
+    }
 
     //
     // Validate usage: buffer cannot be written both by s/w and h/w access.
@@ -142,9 +145,42 @@ static int gralloc_alloc(alloc_device_t* dev,
     bool sw_write = (0 != (usage & GRALLOC_USAGE_SW_WRITE_MASK));
     bool hw_write = (usage & GRALLOC_USAGE_HW_RENDER);
     if (hw_write && sw_write) {
+        ALOGE("gralloc_alloc: Mismatched usage flags: %d x %d, usage %x",
+                w, h, usage);
         return -EINVAL;
     }
     bool sw_read = (0 != (usage & GRALLOC_USAGE_SW_READ_MASK));
+    bool hw_cam_write = usage & GRALLOC_USAGE_HW_CAMERA_WRITE;
+    bool hw_cam_read = usage & GRALLOC_USAGE_HW_CAMERA_READ;
+    bool hw_vid_enc_read = usage & GRALLOC_USAGE_HW_VIDEO_ENCODER;
+
+    // Pick the right concrete pixel format given the endpoints as encoded in
+    // the usage bits.  Every end-point pair needs explicit listing here.
+    if (format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+        // Camera as producer
+        if (usage & GRALLOC_USAGE_HW_CAMERA_WRITE) {
+            if (usage & GRALLOC_USAGE_HW_TEXTURE) {
+                // Camera-to-display is RGBA
+                format = HAL_PIXEL_FORMAT_RGBA_8888;
+            } else if (usage & GRALLOC_USAGE_HW_VIDEO_ENCODER) {
+                // Camera-to-encoder is NV21
+                format = HAL_PIXEL_FORMAT_YCrCb_420_SP;
+            } else if ((usage & GRALLOC_USAGE_HW_CAMERA_MASK) ==
+                    GRALLOC_USAGE_HW_CAMERA_ZSL) {
+                // Camera-to-ZSL-queue is RGB_888
+                format = HAL_PIXEL_FORMAT_RGB_888;
+            }
+        }
+
+        if (format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+            ALOGE("gralloc_alloc: Requested auto format selection, "
+                    "but no known format for this usage: %d x %d, usage %x",
+                    w, h, usage);
+            return -EINVAL;
+        }
+    }
+
+    bool yuv_format = false;
 
     int ashmem_size = 0;
     int stride = w;
@@ -185,14 +221,38 @@ static int gralloc_alloc(alloc_device_t* dev,
         case HAL_PIXEL_FORMAT_RAW_SENSOR:
             bpp = 2;
             align = 16*bpp;
-            if (! (sw_read && sw_write) ) {
-                // Raw sensor data cannot be used by HW
+            if (! ((sw_read || hw_cam_read) && (sw_write || hw_cam_write) ) ) {
+                // Raw sensor data only goes between camera and CPU
                 return -EINVAL;
             }
+            // Not expecting to actually create any GL surfaces for this
             glFormat = GL_LUMINANCE;
             glType = GL_UNSIGNED_SHORT;
             break;
+        case HAL_PIXEL_FORMAT_BLOB:
+            bpp = 1;
+            if (! (sw_read && hw_cam_write) ) {
+                // Blob data cannot be used by HW other than camera emulator
+                return -EINVAL;
+            }
+            // Not expecting to actually create any GL surfaces for this
+            glFormat = GL_LUMINANCE;
+            glType = GL_UNSIGNED_BYTE;
+            break;
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP:
+            align = 1;
+            bpp = 1; // per-channel bpp
+            yuv_format = true;
+            // Not expecting to actually create any GL surfaces for this
+            break;
+        case HAL_PIXEL_FORMAT_YV12:
+            align = 16;
+            bpp = 1; // per-channel bpp
+            yuv_format = true;
+            // Not expecting to actually create any GL surfaces for this
+            break;
         default:
+            ALOGE("gralloc_alloc: Unknown format %d", format);
             return -EINVAL;
     }
 
@@ -201,16 +261,24 @@ static int gralloc_alloc(alloc_device_t* dev,
         ashmem_size += sizeof(uint32_t);
     }
 
-    if (sw_read || sw_write) {
+    if (sw_read || sw_write || hw_cam_write || hw_vid_enc_read) {
         // keep space for image on guest memory if SW access is needed
-
-        size_t bpr = (w*bpp + (align-1)) & ~(align-1);
-        ashmem_size += (bpr * h);
-        stride = bpr / bpp;
+        // or if the camera is doing writing
+        if (yuv_format) {
+            size_t yStride = (w*bpp + (align - 1)) & ~(align-1);
+            size_t uvStride = (yStride / 2 + (align - 1)) & ~(align-1);
+            size_t uvHeight = h / 2;
+            ashmem_size += yStride * h + 2 * (uvHeight * uvStride);
+            stride = yStride / bpp;
+        } else {
+            size_t bpr = (w*bpp + (align-1)) & ~(align-1);
+            ashmem_size += (bpr * h);
+            stride = bpr / bpp;
+        }
     }
 
-    D("gralloc_alloc ashmem_size=%d, stride=%d, tid %d\n", ashmem_size, stride,
-            gettid());
+    D("gralloc_alloc format=%d, ashmem_size=%d, stride=%d, tid %d\n", format,
+            ashmem_size, stride, gettid());
 
     //
     // Allocate space in ashmem if needed
@@ -229,7 +297,7 @@ static int gralloc_alloc(alloc_device_t* dev,
     }
 
     cb_handle_t *cb = new cb_handle_t(fd, ashmem_size, usage,
-                                      w, h, glFormat, glType);
+                                      w, h, format, glFormat, glType);
 
     if (ashmem_size > 0) {
         //
@@ -248,8 +316,11 @@ static int gralloc_alloc(alloc_device_t* dev,
 
     //
     // Allocate ColorBuffer handle on the host (only if h/w access is allowed)
+    // Only do this for some h/w usages, not all.
     //
-    if (usage & GRALLOC_USAGE_HW_MASK) {
+    if (usage & (GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_HW_RENDER |
+                    GRALLOC_USAGE_HW_2D | GRALLOC_USAGE_HW_COMPOSER |
+                    GRALLOC_USAGE_HW_FB) ) {
         DEFINE_HOST_CONNECTION;
         if (hostCon && rcEnc) {
             cb->hostHandle = rcEnc->rcCreateColorBuffer(rcEnc, w, h, glFormat);
@@ -542,14 +613,20 @@ static int gralloc_lock(gralloc_module_t const* module,
     bool sw_write = (0 != (usage & GRALLOC_USAGE_SW_WRITE_MASK));
     bool hw_read = (usage & GRALLOC_USAGE_HW_TEXTURE);
     bool hw_write = (usage & GRALLOC_USAGE_HW_RENDER);
+    bool hw_vid_enc_read = (usage & GRALLOC_USAGE_HW_VIDEO_ENCODER);
+    bool hw_cam_write = (usage & GRALLOC_USAGE_HW_CAMERA_WRITE);
+    bool hw_cam_read = (usage & GRALLOC_USAGE_HW_CAMERA_READ);
     bool sw_read_allowed = (0 != (cb->usage & GRALLOC_USAGE_SW_READ_MASK));
     bool sw_write_allowed = (0 != (cb->usage & GRALLOC_USAGE_SW_WRITE_MASK));
 
     if ( (hw_read || hw_write) ||
-         (!sw_read && !sw_write) ||
+         (!sw_read && !sw_write &&
+                 !hw_cam_write && !hw_cam_read &&
+                 !hw_vid_enc_read) ||
          (sw_read && !sw_read_allowed) ||
          (sw_write && !sw_write_allowed) ) {
-        ALOGE("gralloc_lock usage mismatch usage=0x%x cb->usage=0x%x\n", usage, cb->usage);
+        ALOGE("gralloc_lock usage mismatch usage=0x%x cb->usage=0x%x\n", usage,
+                cb->usage);
         return -EINVAL;
     }
 
@@ -559,7 +636,9 @@ static int gralloc_lock(gralloc_module_t const* module,
     //
     // make sure ashmem area is mapped if needed
     //
-    if (cb->canBePosted() || sw_read || sw_write) {
+    if (cb->canBePosted() || sw_read || sw_write ||
+            hw_cam_write || hw_cam_read ||
+            hw_vid_enc_read) {
         if (cb->ashmemBasePid != getpid() || !cb->ashmemBase) {
             return -EACCES;
         }
@@ -596,11 +675,11 @@ static int gralloc_lock(gralloc_module_t const* module,
     //
     // is virtual address required ?
     //
-    if (sw_read || sw_write) {
+    if (sw_read || sw_write || hw_cam_write || hw_cam_read || hw_vid_enc_read) {
         *vaddr = cpu_addr;
     }
 
-    if (sw_write) {
+    if (sw_write || hw_cam_write) {
         //
         // Keep locked region if locked for s/w write access.
         //
@@ -609,6 +688,9 @@ static int gralloc_lock(gralloc_module_t const* module,
         cb->lockedWidth = w;
         cb->lockedHeight = h;
     }
+
+    DD("gralloc_lock success. vaddr: %p, *vaddr: %p, usage: %x, cpu_addr: %p",
+            vaddr, vaddr ? *vaddr : 0, usage, cpu_addr);
 
     return 0;
 }

@@ -263,10 +263,9 @@ egl_window_surface_t::egl_window_surface_t (
 
 EGLBoolean egl_window_surface_t::init()
 {
-    if (nativeWindow->dequeueBuffer(nativeWindow, &buffer) != NO_ERROR) {
+    if (nativeWindow->dequeueBuffer_DEPRECATED(nativeWindow, &buffer) != NO_ERROR) {
         setErrorReturn(EGL_BAD_ALLOC, EGL_FALSE);
     }
-    nativeWindow->lockBuffer(nativeWindow, buffer);
 
     DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
     rcSurface = rcEnc->rcCreateWindowSurface(rcEnc, (uint32_t)config,
@@ -300,7 +299,7 @@ egl_window_surface_t::~egl_window_surface_t() {
         rcEnc->rcDestroyWindowSurface(rcEnc, rcSurface);
     }
     if (buffer) {
-        nativeWindow->cancelBuffer(nativeWindow, buffer);
+        nativeWindow->cancelBuffer_DEPRECATED(nativeWindow, buffer);
     }
     nativeWindow->common.decRef(&nativeWindow->common);
 }
@@ -316,12 +315,11 @@ EGLBoolean egl_window_surface_t::swapBuffers()
 
     rcEnc->rcFlushWindowColorBuffer(rcEnc, rcSurface);
 
-    nativeWindow->queueBuffer(nativeWindow, buffer);
-    if (nativeWindow->dequeueBuffer(nativeWindow, &buffer)) {
+    nativeWindow->queueBuffer_DEPRECATED(nativeWindow, buffer);
+    if (nativeWindow->dequeueBuffer_DEPRECATED(nativeWindow, &buffer)) {
         buffer = NULL;
         setErrorReturn(EGL_BAD_ALLOC, EGL_FALSE);
     }
-    nativeWindow->lockBuffer(nativeWindow, buffer);
 
     rcEnc->rcSetWindowColorBuffer(rcEnc, rcSurface,
             ((cb_handle_t *)(buffer->handle))->hostHandle);
@@ -1148,7 +1146,9 @@ EGLImageKHR eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EG
     if (native_buffer->common.version != sizeof(android_native_buffer_t))
         setErrorReturn(EGL_BAD_PARAMETER, EGL_NO_IMAGE_KHR);
 
-    switch (native_buffer->format) {
+    cb_handle_t *cb = (cb_handle_t *)(native_buffer->handle);
+
+    switch (cb->format) {
         case HAL_PIXEL_FORMAT_RGBA_8888:
         case HAL_PIXEL_FORMAT_RGBX_8888:
         case HAL_PIXEL_FORMAT_RGB_888:
