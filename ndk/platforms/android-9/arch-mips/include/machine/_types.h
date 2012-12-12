@@ -1,7 +1,7 @@
 /*	$OpenBSD: _types.h,v 1.5 2008/07/21 20:50:54 martynas Exp $	*/
 
 /*-
- * Copyright (c) 1990, 1993
+ * Copyright (c) 1990, 1993, 2012
  *	The Regents of the University of California.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,8 +54,6 @@ typedef	unsigned int		__uint32_t;
 typedef	long long		__int64_t;
 /* LONGLONG */
 typedef	unsigned long long	__uint64_t;
-typedef float		__float_t;
-typedef double		__double_t;
 
 /* 7.18.1.2 Minimum-width integer types */
 typedef	__int8_t		__int_least8_t;
