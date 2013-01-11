@@ -1,7 +1,7 @@
 /*	$OpenBSD: _types.h,v 1.3 2006/02/14 18:12:58 miod Exp $	*/
 
 /*-
- * Copyright (c) 1990, 1993
+ * Copyright (c) 1990, 1993, 2013
  *	The Regents of the University of California.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,6 @@
 
 #ifndef _ARM__TYPES_H_
 #define _ARM__TYPES_H_
-
 
 #if !defined(__ARM_EABI__)
 /* the kernel defines size_t as unsigned int, but g++ wants it to be unsigned long */
@@ -120,11 +119,5 @@ typedef	int			__rune_t;
 typedef int     __ct_rune_t;
 typedef	void *			__wctrans_t;
 typedef	void *			__wctype_t;
-
-#ifdef __ARMEB__
-#define _BYTE_ORDER _BIG_ENDIAN
-#else
-#define _BYTE_ORDER _LITTLE_ENDIAN
-#endif
 
 #endif	/* _ARM__TYPES_H_ */
