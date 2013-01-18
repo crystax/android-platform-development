@@ -37,6 +37,7 @@
 #ifndef	_SYS_CDEFS_H_
 #define	_SYS_CDEFS_H_
 
+
 /*
  * Macro to test if we're using a GNU C compiler of a specific vintage
  * or later, for e.g. features that appeared in a particular version
@@ -213,7 +214,7 @@
  * C99 defines the restrict type qualifier keyword, which was made available
  * in GCC 2.92.
  */
-#if defined(__STDC__VERSION__) && __STDC_VERSION__ >= 199901L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
 #define	__restrict	restrict
 #else
 #if !__GNUC_PREREQ__(2, 92)
@@ -225,7 +226,8 @@
  * C99 defines __func__ predefined identifier, which was made available
  * in GCC 2.95.
  */
-#if !defined(__STDC_VERSION__) || !(__STDC_VERSION__ >= 199901L)
+#if defined(__STDC_VERSION__)
+#if !(__STDC_VERSION__ >= 199901L)
 #if __GNUC_PREREQ__(2, 6)
 #define	__func__	__PRETTY_FUNCTION__
 #elif __GNUC_PREREQ__(2, 4)
@@ -234,6 +236,9 @@
 #define	__func__	""
 #endif
 #endif /* !(__STDC_VERSION__ >= 199901L) */
+#else
+#define __func__  ""
+#endif /* defined(__STDC_VERSION__) */
 
 #if defined(_KERNEL)
 #if defined(NO_KERNEL_RCSIDS)
