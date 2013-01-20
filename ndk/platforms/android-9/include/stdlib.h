@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 The Android Open Source Project
+ * Copyright (C) 2008, 2013 The Android Open Source Project
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -179,6 +179,11 @@ extern size_t	wcstombs(char *, const wchar_t *, size_t);
 #if 0 /* MISSING FROM BIONIC */
 extern int on_exit(void (*)(int, void *), void *);
 #endif /* MISSING */
+
+#if 1 /* theses C99 functions are implemented in LIBCRYSTAX */
+extern __noreturn void _Exit(int);
+extern long double strtold(const char *str, char **tailptr);
+#endif
 
 __END_DECLS
 
