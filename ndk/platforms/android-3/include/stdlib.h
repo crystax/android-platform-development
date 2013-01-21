@@ -180,9 +180,10 @@ extern int on_exit(void (*)(int, void *), void *);
 extern int clearenv(void);
 #endif /* MISSING */
 
-#if 1 /* theses C99 functions are implemented in LIBCRYSTAX */
+#if 1 /* theses ISO C and C99 functions are implemented in LIBCRYSTAX */
 extern __noreturn void _Exit(int);
 extern long double strtold(const char *str, char **tailptr);
+extern int rand_r (unsigned int *seed);
 #endif
 
 
