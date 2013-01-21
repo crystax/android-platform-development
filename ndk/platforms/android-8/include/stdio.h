@@ -2,7 +2,7 @@
 /*	$NetBSD: stdio.h,v 1.18 1996/04/25 18:29:21 jtc Exp $	*/
 
 /*-
- * Copyright (c) 1990 The Regents of the University of California.
+ * Copyright (c) 1990, 2013 The Regents of the University of California.
  * All rights reserved.
  *
  * This code is derived from software contributed to Berkeley by
@@ -428,5 +428,13 @@ static __inline int __sputc(int _c, FILE *_p) {
 int fdprintf(int, const char*, ...);
 int vfdprintf(int, const char*, __va_list);
 #endif /* _GNU_SOURCE */
+
+/*
+ * These ANSI C functions implemented in crystax lib
+ */
+__BEGIN_DECLS
+ssize_t	 getdelim(char ** __restrict, size_t * __restrict, int, FILE * __restrict);
+ssize_t	 getline(char ** __restrict, size_t * __restrict, FILE * __restrict);
+__END_DECLS
 
 #endif /* _STDIO_H_ */
