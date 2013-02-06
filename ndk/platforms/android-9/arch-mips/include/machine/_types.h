@@ -1,7 +1,7 @@
 /*	$OpenBSD: _types.h,v 1.5 2008/07/21 20:50:54 martynas Exp $	*/
 
 /*-
- * Copyright (c) 1990, 1993, 2012
+ * Copyright (c) 1990, 1993, 2012, 2013
  *	The Regents of the University of California.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -115,7 +115,7 @@ typedef	char *			__va_list;
 
 /* Wide character support types */
 #ifndef __cplusplus
-typedef	int			__wchar_t;
+typedef	unsigned int __wchar_t;
 #endif
 typedef int			__wint_t;
 typedef	int			__rune_t;

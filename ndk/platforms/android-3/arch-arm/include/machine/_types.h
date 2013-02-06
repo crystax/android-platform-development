@@ -112,7 +112,7 @@ typedef	char *			__va_list;
 
 /* Wide character support types */
 #ifndef __cplusplus
-typedef	int			__wchar_t;
+typedef	unsigned int __wchar_t;
 #endif
 typedef int			__wint_t;
 typedef	int			__rune_t;
