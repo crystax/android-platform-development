@@ -93,6 +93,8 @@ typedef __uint32_t fexcept_t;
 #define FE_UPWARD     0x0002
 #define FE_DOWNWARD   0x0003
 
+#define _FCSR_RMASK   0x3
+
 __END_DECLS
 
 #endif /* !_MIPS_FENV_H_ */
