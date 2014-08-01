@@ -45,8 +45,8 @@ extern int iswpunct_l(wint_t, locale_t);
 extern int iswspace_l(wint_t, locale_t);
 extern int iswupper_l(wint_t, locale_t);
 extern int iswxdigit_l(wint_t, locale_t);
-extern int towlower_l(int, locale_t);
-extern int towupper_l(int, locale_t);
+extern wint_t towlower_l(wint_t, locale_t);
+extern wint_t towupper_l(wint_t, locale_t);
 
 extern int iswctype_l(wint_t, wctype_t, locale_t);
 extern wctype_t wctype_l(const char*, locale_t);
