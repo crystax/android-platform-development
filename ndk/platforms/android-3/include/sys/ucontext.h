@@ -78,10 +78,6 @@ typedef struct ucontext {
 
 #elif defined(__aarch64__)
 
-#define NGREG 34 /* x0..x30 + sp + pc + pstate */
-typedef unsigned long greg_t;
-typedef greg_t gregset_t[NGREG];
-
 #include <asm/sigcontext.h>
 typedef struct sigcontext mcontext_t;
 
