@@ -51,7 +51,7 @@ enum {
 
 extern char *setlocale(int category, const char *locale);
 
-#if 1 /* MISSING FROM BIONIC - DEFINED TO MAKE libstdc++-v3 happy */
+#if 0 /* MISSING FROM BIONIC - DEFINED TO MAKE libstdc++-v3 happy */
 struct lconv { };
 struct lconv *localeconv(void);
 #endif /* MISSING */
