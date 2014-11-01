@@ -41,12 +41,15 @@
   #define __RESERVED_INITIALIZER
 #endif
 
+#ifndef _PTHREAD_MUTEX_T_DECLARED
 typedef struct {
   int volatile value;
 #ifdef __LP64__
   char __reserved[36];
 #endif
 } pthread_mutex_t;
+#define _PTHREAD_MUTEX_T_DECLARED
+#endif
 
 #define  __PTHREAD_MUTEX_INIT_VALUE            0
 #define  __PTHREAD_RECURSIVE_MUTEX_INIT_VALUE  0x4000
@@ -118,7 +121,10 @@ typedef struct {
 #endif
 
 typedef int pthread_key_t;
+#ifndef _PTHREAD_T_DECLARED
 typedef long pthread_t;
+#define _PTHREAD_T_DECLARED
+#endif
 
 typedef volatile int pthread_once_t;
 

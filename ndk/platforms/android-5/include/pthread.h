@@ -37,10 +37,13 @@
 /*
  * Types
  */
+#ifndef _PTHREAD_MUTEX_T_DECLARED
 typedef struct
 {
     int volatile value;
 } pthread_mutex_t;
+#define _PTHREAD_MUTEX_T_DECLARED
+#endif
 
 #define  __PTHREAD_MUTEX_INIT_VALUE            0
 #define  __PTHREAD_RECURSIVE_MUTEX_INIT_VALUE  0x4000
@@ -82,7 +85,10 @@ typedef long pthread_mutexattr_t;
 typedef long pthread_condattr_t;
 
 typedef int pthread_key_t;
+#ifndef _PTHREAD_T_DECLARED
 typedef long pthread_t;
+#define _PTHREAD_T_DECLARED
+#endif
 
 typedef volatile int  pthread_once_t;
 
