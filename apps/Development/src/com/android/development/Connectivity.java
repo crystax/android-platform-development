@@ -28,6 +28,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.net.ConnectivityManager;
+import android.net.LinkAddress;
 import android.net.NetworkUtils;
 import android.net.RouteInfo;
 import android.net.wifi.ScanResult;
@@ -224,10 +225,13 @@ public class Connectivity extends Activity {
                     mStartTime = -1;
                 }
                 Log.d(TAG, "Scan: READY " + mScanCur);
+                mScanResults.setVisibility(View.INVISIBLE);
 
                 List<ScanResult> wifiScanResults = mWm.getScanResults();
                 if (wifiScanResults != null) {
                     mTotalScanCount += wifiScanResults.size();
+                    mScanResults.setText("Current scan = " + Long.toString(wifiScanResults.size()));
+                    mScanResults.setVisibility(View.VISIBLE);
                     Log.d(TAG, "Scan: Results = " + wifiScanResults.size());
                 }
 
@@ -236,6 +240,7 @@ public class Connectivity extends Activity {
                 if (mScanCur == 0) {
                     unregisterReceiver(mScanRecv);
                     mScanButton.setText(GET_SCAN_RES);
+                    mScanResults.setVisibility(View.INVISIBLE);
                 } else {
                     Log.d(TAG, "Scan: START " + mScanCur);
                     mStartTime = SystemClock.elapsedRealtime();
@@ -524,7 +529,8 @@ public class Connectivity extends Activity {
 
     private void onAddDefaultRoute() {
         try {
-            mNetd.addRoute("eth0", new RouteInfo(null,
+            int netId = Integer.valueOf(((TextView) findViewById(R.id.netid)).getText().toString());
+            mNetd.addRoute(netId, new RouteInfo((LinkAddress) null,
                     NetworkUtils.numericToInetAddress("8.8.8.8")));
         } catch (Exception e) {
             Log.e(TAG, "onAddDefaultRoute got exception: " + e.toString());
@@ -533,7 +539,8 @@ public class Connectivity extends Activity {
 
     private void onRemoveDefaultRoute() {
         try {
-            mNetd.removeRoute("eth0", new RouteInfo(null,
+            int netId = Integer.valueOf(((TextView) findViewById(R.id.netid)).getText().toString());
+            mNetd.removeRoute(netId, new RouteInfo((LinkAddress) null,
                     NetworkUtils.numericToInetAddress("8.8.8.8")));
         } catch (Exception e) {
             Log.e(TAG, "onRemoveDefaultRoute got exception: " + e.toString());

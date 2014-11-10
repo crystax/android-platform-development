@@ -44,6 +44,11 @@ development/sdk/plat_tools_source.properties  platform-tools/source.properties
 # host tools from out/host/$(HOST_OS)-$(HOST_ARCH)/
 bin/adb                                 strip platform-tools/adb
 bin/fastboot                            strip platform-tools/fastboot
+bin/sqlite3                             strip platform-tools/sqlite3
+bin/dmtracedump                         strip platform-tools/dmtracedump
+bin/etc1tool                            strip platform-tools/etc1tool
+bin/hprof-conv                          strip platform-tools/hprof-conv
+
 
 # API database for tools such as lint
 development/sdk/generated-api-versions.xml    platform-tools/api/api-versions.xml
@@ -170,8 +175,7 @@ docs/widgets.txt                          platforms/${PLATFORM_NAME}/data/widget
 docs/features.txt                         platforms/${PLATFORM_NAME}/data/features.txt
 
 # fonts for layoutlib.
-frameworks/base/data/fonts                platforms/${PLATFORM_NAME}/data/fonts
-external/noto-fonts                       platforms/${PLATFORM_NAME}/data/fonts
+${FONT_OUT}                       platforms/${PLATFORM_NAME}/data/fonts
 
 # NOTICE files are copied by build/core/Makefile from sdk.git
 development/sdk/sdk_files_NOTICE.txt      platforms/${PLATFORM_NAME}/templates/NOTICE.txt
@@ -264,9 +268,57 @@ developers/build/prebuilts/gradle/BatchStepSensor                            sam
 developers/build/prebuilts/gradle/DisplayingBitmaps                          samples/${PLATFORM_NAME}/ui/DisplayingBitmaps
 developers/build/prebuilts/gradle/BasicTransition                            samples/${PLATFORM_NAME}/ui/BasicTransition
 developers/build/prebuilts/gradle/AdapterTransition                          samples/${PLATFORM_NAME}/ui/AdapterTransition
+developers/build/prebuilts/gradle/CustomTransition                           samples/${PLATFORM_NAME}/ui/CustomTransition
+developers/build/prebuilts/gradle/FragmentTransition                         samples/${PLATFORM_NAME}/ui/FragmentTransition
+developers/build/prebuilts/gradle/SwipeRefreshLayoutBasic                    samples/${PLATFORM_NAME}/ui/SwipeRefreshLayoutBasic
+developers/build/prebuilts/gradle/SwipeRefreshListFragment                   samples/${PLATFORM_NAME}/ui/SwipeRefreshListFragment
+developers/build/prebuilts/gradle/SwipeRefreshMultipleViews                  samples/${PLATFORM_NAME}/ui/SwipeRefreshMultipleViews
 developers/build/prebuilts/gradle/MediaRouter                                samples/${PLATFORM_NAME}/media/MediaRouter
+developers/build/prebuilts/gradle/BluetoothChat                              samples/${PLATFORM_NAME}/connectivity/bluetooth/BluetoothChat
+developers/build/prebuilts/gradle/MediaEffects                               samples/${PLATFORM_NAME}/media/MediaEffects
+developers/build/prebuilts/gradle/BasicManagedProfile                        samples/${PLATFORM_NAME}/admin/BasicManagedProfile
+developers/build/prebuilts/gradle/Camera2Basic                               samples/${PLATFORM_NAME}/media/Camera2Basic
+developers/build/prebuilts/gradle/Camera2Video                               samples/${PLATFORM_NAME}/media/Camera2Video
+developers/build/prebuilts/gradle/ActivitySceneTransitionBasic               samples/${PLATFORM_NAME}/ui/activityscenetransition/ActivitySceneTransitionBasic
+developers/build/prebuilts/gradle/NavigationDrawer                           samples/${PLATFORM_NAME}/ui/views/NavigationDrawer
+developers/build/prebuilts/gradle/ElevationBasic                             samples/${PLATFORM_NAME}/ui/views/Elevation/ElevationBasic
+developers/build/prebuilts/gradle/ElevationDrag                              samples/${PLATFORM_NAME}/ui/views/Elevation/ElevationDrag
+developers/build/prebuilts/gradle/ClippingBasic                              samples/${PLATFORM_NAME}/ui/views/Clipping/ClippingBasic
+developers/build/prebuilts/gradle/JobScheduler                               samples/${PLATFORM_NAME}/ui/views/Clipping/JobScheduler
+developers/build/prebuilts/gradle/HdrViewfinder                              samples/${PLATFORM_NAME}/media/HdrViewfinder
+developers/build/prebuilts/gradle/DocumentCentricApps                        samples/${PLATFORM_NAME}/ui/activitytasks/DocumentCentricApps
+developers/build/prebuilts/gradle/DocumentCentricRelinquishIdentity          samples/${PLATFORM_NAME}/ui/activitytasks/DocumentCentricRelinquishIdentity
+developers/build/prebuilts/gradle/AppRestrictionEnforcer                     samples/${PLATFORM_NAME}/admin/AppRestrictionEnforcer
+developers/build/prebuilts/gradle/AppRestrictionSchema                       samples/${PLATFORM_NAME}/admin/AppRestrictionSchema
+developers/build/prebuilts/gradle/RecyclerView                               samples/${PLATFORM_NAME}/ui/views/RecyclerView
+developers/build/prebuilts/gradle/CardView                                   samples/${PLATFORM_NAME}/ui/views/CardView
+developers/build/prebuilts/gradle/LNotifications                             samples/${PLATFORM_NAME}/ui/notifications/LNotifications
+developers/build/prebuilts/gradle/DrawableTinting                            samples/${PLATFORM_NAME}/ui/DrawableTinting
+developers/build/prebuilts/gradle/Interpolator                               samples/${PLATFORM_NAME}/ui/Interpolator
+developers/build/prebuilts/gradle/PdfRendererBasic                           samples/${PLATFORM_NAME}/ui/graphics/PdfRendererBasic
+developers/build/prebuilts/gradle/FloatingActionButtonBasic                  samples/${PLATFORM_NAME}/ui/views/FloatingActionButton/FloatingActionButtonBasic
+developers/build/prebuilts/gradle/RevealEffectBasic                          samples/${PLATFORM_NAME}/ui/views/RevealEffect/RevealEffectBasic
 
+developers/build/prebuilts/androidtv                                         samples/${PLATFORM_NAME}/androidtv
 
+# Wearable sample tree
+development/samples/wearable/AgendaData                    samples/${PLATFORM_NAME}/wearable/AgendaData
+development/samples/wearable/DataLayer                     samples/${PLATFORM_NAME}/wearable/DataLayer
+development/samples/wearable/DelayedConfirmation           samples/${PLATFORM_NAME}/wearable/DelayedConfirmation
+development/samples/wearable/ElizaChat                     samples/${PLATFORM_NAME}/wearable/ElizaChat
+development/samples/wearable/EmbeddedApp                   samples/${PLATFORM_NAME}/wearable/EmbeddedApp
+development/samples/wearable/FindMyPhone                   samples/${PLATFORM_NAME}/wearable/FindMyPhone
+development/samples/wearable/Flashlight                    samples/${PLATFORM_NAME}/wearable/Flashlight
+development/samples/wearable/Geofencing                    samples/${PLATFORM_NAME}/wearable/Geofencing
+development/samples/wearable/GridViewPager                 samples/${PLATFORM_NAME}/wearable/GridViewPager
+development/samples/wearable/JumpingJack                   samples/${PLATFORM_NAME}/wearable/JumpingJack
+development/samples/wearable/Notifications                 samples/${PLATFORM_NAME}/wearable/Notifications
+development/samples/wearable/Quiz                          samples/${PLATFORM_NAME}/wearable/Quiz
+development/samples/wearable/RecipeAssistant               samples/${PLATFORM_NAME}/wearable/RecipeAssistant
+development/samples/wearable/SkeletonWearableApp           samples/${PLATFORM_NAME}/wearable/SkeletonWearableApp
+development/samples/wearable/SynchronizedNotifications     samples/${PLATFORM_NAME}/wearable/SynchronizedNotifications
+development/samples/wearable/Timer                         samples/${PLATFORM_NAME}/wearable/Timer
+development/samples/wearable/WatchViewStub                 samples/${PLATFORM_NAME}/wearable/WatchViewStub
 
 # Old sample tree
 development/samples/AccelerometerPlay          samples/${PLATFORM_NAME}/legacy/AccelerometerPlay
@@ -276,7 +328,6 @@ development/samples/ApiDemos                   samples/${PLATFORM_NAME}/legacy/A
 development/samples/AppNavigation              samples/${PLATFORM_NAME}/legacy/AppNavigation
 development/samples/BackupRestore              samples/${PLATFORM_NAME}/legacy/BackupRestore
 development/samples/BasicGLSurfaceView         samples/${PLATFORM_NAME}/legacy/BasicGLSurfaceView
-development/samples/BluetoothChat              samples/${PLATFORM_NAME}/legacy/BluetoothChat
 development/samples/BluetoothHDP               samples/${PLATFORM_NAME}/legacy/BluetoothHDP
 development/samples/ContactManager             samples/${PLATFORM_NAME}/legacy/ContactManager
 development/samples/CrossCompatibility         samples/${PLATFORM_NAME}/legacy/CrossCompatibility
@@ -337,6 +388,8 @@ development/sdk/support_source.properties                                       
 development/sdk/support_README.txt                                                                extras/android/support/README.txt
 development/sdk/sdk_files_NOTICE.txt                                                              extras/android/support/NOTICE.txt
 
+${OUT_DIR}/target/common/obj/PACKAGING/android-support-annotations_intermediates/android-support-annotations.jar extras/android/support/annotations/android-support-annotations.jar
+
 ${OUT_DIR}/target/common/obj/PACKAGING/android-support-v4_intermediates/android-support-v4.jar    extras/android/support/v4/android-support-v4.jar
 frameworks/support/v4                                                                             extras/android/support/v4/src
 development/samples/Support4Demos                                                                 extras/android/support/samples/Support4Demos
@@ -395,9 +448,36 @@ ${OUT_DIR}/target/common/obj/PACKAGING/android-support-v7-mediarouter_intermedia
 
 development/samples/Support7Demos                                                                 extras/android/support/samples/Support7Demos
 
+frameworks/support/v7/palette/README.txt                                                          extras/android/support/v7/palette/README.txt
+frameworks/support/v7/palette/.project                                                            extras/android/support/v7/palette/.project
+frameworks/support/v7/palette/.classpath                                                          extras/android/support/v7/palette/.classpath
+frameworks/support/v7/palette/AndroidManifest.xml                                                 extras/android/support/v7/palette/AndroidManifest.xml
+frameworks/support/v7/palette/project.properties                                                  extras/android/support/v7/palette/project.properties
+${OUT_DIR}/target/common/obj/PACKAGING/android-support-v7-palette_intermediates/android-support-v7-palette.jar    extras/android/support/v7/palette/libs/android-support-v7-palette.jar
+
+frameworks/support/v7/cardview/AndroidManifest.xml                                              extras/android/support/v7/cardview/AndroidManifest.xml
+frameworks/support/v7/cardview/res                                                              extras/android/support/v7/cardview/res
+frameworks/support/v7/cardview/src/.readme                                                      extras/android/support/v7/cardview/src/.readme
+${OUT_DIR}/target/common/obj/PACKAGING/android-support-v7-cardview_intermediates/android-support-v7-cardview.jar    extras/android/support/v7/cardview/libs/android-support-v7-cardview.jar
+
+
+# TODO: add .project, .classpath, etc.
+frameworks/support/v7/recyclerview/README.txt                                                     extras/android/support/v7/recyclerview/README.txt
+frameworks/support/v7/recyclerview/AndroidManifest.xml                                            extras/android/support/v7/recyclerview/AndroidManifest.xml
+${OUT_DIR}/target/common/obj/PACKAGING/android-support-v7-recyclerview_intermediates/android-support-v7-recyclerview.jar    extras/android/support/v7/recyclerview/libs/android-support-v7-recyclerview.jar
+
+frameworks/support/v17/leanback/README.txt                                                        extras/android/support/v17/leanback/README.txt
+frameworks/support/v17/leanback/.project                                                          extras/android/support/v17/leanback/.project
+frameworks/support/v17/leanback/.classpath                                                        extras/android/support/v17/leanback/.classpath
+frameworks/support/v17/leanback/AndroidManifest.xml                                               extras/android/support/v17/leanback/AndroidManifest.xml
+frameworks/support/v17/leanback/project.properties                                                extras/android/support/v17/leanback/project.properties
+frameworks/support/v17/leanback/res                                                               extras/android/support/v17/leanback/res
+frameworks/support/v17/leanback/src/.readme                                                       extras/android/support/v17/leanback/src/.readme
+${OUT_DIR}/target/common/obj/PACKAGING/android-support-v17-leanback_intermediates/android-support-v17-leanback.jar    extras/android/support/v17/leanback/libs/android-support-v17-leanback.jar
+
 ##############################################################################
 # Tests Component
 ##############################################################################
 framework/layoutlib-tests.jar tests/libtests/layoutlib-tests.jar
-system/app/EmulatorSmokeTests.apk tests/emulator-test-apps/EmulatorSmokeTests.apk
+system/app/EmulatorSmokeTests/EmulatorSmokeTests.apk tests/emulator-test-apps/EmulatorSmokeTests.apk
 

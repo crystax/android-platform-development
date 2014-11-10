@@ -48,10 +48,12 @@ subdirs += \
 	external/protobuf \
 	external/sqlite/dist \
 	external/zlib \
+	external/zopfli \
 	frameworks/base \
 	frameworks/compile \
 	frameworks/native \
 	frameworks/rs \
+	frameworks/tools \
 	system/core/adb \
 	system/core/fastboot \
 	system/core/libcutils \
