@@ -46,7 +46,7 @@ struct linger {
 
 struct msghdr {
  void * msg_name;
- int msg_namelen;
+ unsigned int msg_namelen;
  struct iovec * msg_iov;
  __kernel_size_t msg_iovlen;
  void * msg_control;
