@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 The Android Open Source Project
+ * Copyright (C) 2010 The Android Open Source Project
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,11 +26,14 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _SGIDEFS_H_
-#define _SGIDEFS_H_
+/*
+ * machine/setjmp.h: machine dependent setjmp-related information.
+ */
 
-#ifdef __mips__
-#include <asm/sgidefs.h>
-#endif
-
-#endif /* _SGIDEFS_H_ */
+/* _JBLEN is the size of a jmp_buf in longs.
+ * Do not modify this value or you will break the ABI !
+ *
+ * This value comes from the original OpenBSD ARM-specific header
+ * that was replaced by this one.
+ */
+#define _JBLEN  160
