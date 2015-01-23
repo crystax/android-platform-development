@@ -32,6 +32,7 @@ public class HelloNeon extends Activity
      * installation time by the package manager.
      */
     static {
+        System.loadLibrary("crystax");
         System.loadLibrary("helloneon");
     }
 }

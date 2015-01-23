@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 The Android Open Source Project
+ * Copyright (C) 2014, 2015 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -260,7 +260,8 @@ public class NativeCodec extends Activity {
 
     /** Load jni .so on initialization */
     static {
-         System.loadLibrary("native-codec-jni");
+        System.loadLibrary("crystax");
+        System.loadLibrary("native-codec-jni");
     }
 
     // VideoSink abstracts out the difference between Surface and SurfaceTexture

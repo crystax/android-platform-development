@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 The Android Open Source Project
+ * Copyright 2013, 2015 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,8 @@ package com.android.gles3jni;
 public class GLES3JNILib {
 
      static {
-         System.loadLibrary("gles3jni");
+        System.loadLibrary("crystax");
+        System.loadLibrary("gles3jni");
      }
 
      public static native void init();
