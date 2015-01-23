@@ -1,1 +1,1 @@
-APP_ABI := all
+Application-18.mk

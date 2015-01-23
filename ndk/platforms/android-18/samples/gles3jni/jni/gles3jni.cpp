@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 The Android Open Source Project
+ * Copyright 2013, 2015 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,7 +162,7 @@ void Renderer::calcSceneParams(unsigned int w, unsigned int h,
     const float aspect[2] = {dim[0] / dim[1], dim[1] / dim[0]};
     const float scene2clip[2] = {1.0f, aspect[0]};
     const int ncells[2] = {
-            NCELLS_MAJOR,
+            (int)NCELLS_MAJOR,
             (int)floorf(NCELLS_MAJOR * aspect[1])
     };
 
