@@ -30,17 +30,40 @@
 # it in your browser).
 #
 
+if [ "$1" = "--clean" ]; then
+  find $ANDROID_HOST_OUT \( -name '*.gcda' -o -name '*.gcno' \) -delete
+  find $ANDROID_PRODUCT_OUT \( -name '*.gcda' -o -name '*.gcno' \) -delete
+  exit 0
+fi
+
+if [ "$1" = "--prep" ]; then
+  find $ANDROID_HOST_OUT -name '*.gcda' -delete
+  find $ANDROID_PRODUCT_OUT -name '*.gcda' -delete
+  exit 0
+fi
+
 which lcov >/dev/null 2>/dev/null
 if [ $? -ne 0 ]; then
   echo 'lcov not found: running `sudo apt-get install lcov`'
   sudo apt-get install lcov
 fi
 
+HOST=false
+ANDROID_OUT=$ANDROID_PRODUCT_OUT
+if [ "$1" = "--host" ]; then
+  HOST=true
+  ANDROID_OUT=$ANDROID_HOST_OUT
+fi
+
 cd $ANDROID_BUILD_TOP
 FILE=cov.info
 DIR=$(mktemp -d covreport-XXXXXX)
-adb pull /data/local/tmp/gcov
-lcov -c -d $ANDROID_PRODUCT_OUT -o $DIR/$FILE
+
+if [ "$HOST" = "false" ]; then
+  adb pull /data/local/tmp/gcov
+fi
+
+lcov -c -d $ANDROID_OUT -o $DIR/$FILE
 echo "Generating coverage report at $DIR"
 genhtml -q -o $DIR $DIR/$FILE
 xdg-open $DIR/index.html >/dev/null
