@@ -40,6 +40,9 @@
 
 __BEGIN_DECLS
 
+pid_t getpid(void);
+int kill(pid_t pid, int sig);
+
 typedef __uint32_t fenv_t;
 typedef __uint32_t fexcept_t;
 
@@ -77,6 +80,32 @@ static __inline int fesetenv(const fenv_t* __envp) {
   return 0;
 }
 
+#if __BSD_VISIBLE
+
+static __inline int feenableexcept(int __mask) {
+  fenv_t __old_fpscr, __new_fpscr;
+  fegetenv(&__old_fpscr);
+  __new_fpscr = __old_fpscr | (__mask & FE_ALL_EXCEPT) << _FPSCR_ENABLE_SHIFT;
+  fesetenv(&__new_fpscr);
+  return ((__old_fpscr >> _FPSCR_ENABLE_SHIFT) & FE_ALL_EXCEPT);
+}
+
+static __inline int fedisableexcept(int __mask) {
+  fenv_t __old_fpscr, __new_fpscr;
+  fegetenv(&__old_fpscr);
+  __new_fpscr = __old_fpscr & ~((__mask & FE_ALL_EXCEPT) << _FPSCR_ENABLE_SHIFT);
+  fesetenv(&__new_fpscr);
+  return ((__old_fpscr >> _FPSCR_ENABLE_SHIFT) & FE_ALL_EXCEPT);
+}
+
+static __inline int fegetexcept(void) {
+  fenv_t __fpscr;
+  fegetenv(&__fpscr);
+  return ((__fpscr & _FPSCR_ENABLE_MASK) >> _FPSCR_ENABLE_SHIFT);
+}
+
+#endif /* __BSD_VISIBLE */
+
 static __inline int feclearexcept(int __excepts) {
   fexcept_t __fpscr;
   fegetenv(&__fpscr);
@@ -104,6 +133,10 @@ static __inline int fesetexceptflag(const fexcept_t* __flagp, int __excepts) {
 static __inline int feraiseexcept(int __excepts) {
   fexcept_t __ex = __excepts;
   fesetexceptflag(&__ex, __excepts);
+#if __BSD_VISIBLE
+  if ((fegetexcept() & __excepts) != 0)
+      kill(getpid(), 8); /* SIGFPE */
+#endif
   return 0;
 }
 
@@ -144,32 +177,6 @@ static __inline int feupdateenv(const fenv_t* __envp) {
   feraiseexcept(__fpscr & FE_ALL_EXCEPT);
   return 0;
 }
-
-#if __BSD_VISIBLE
-
-static __inline int feenableexcept(int __mask) {
-  fenv_t __old_fpscr, __new_fpscr;
-  fegetenv(&__old_fpscr);
-  __new_fpscr = __old_fpscr | (__mask & FE_ALL_EXCEPT) << _FPSCR_ENABLE_SHIFT;
-  fesetenv(&__new_fpscr);
-  return ((__old_fpscr >> _FPSCR_ENABLE_SHIFT) & FE_ALL_EXCEPT);
-}
-
-static __inline int fedisableexcept(int __mask) {
-  fenv_t __old_fpscr, __new_fpscr;
-  fegetenv(&__old_fpscr);
-  __new_fpscr = __old_fpscr & ~((__mask & FE_ALL_EXCEPT) << _FPSCR_ENABLE_SHIFT);
-  fesetenv(&__new_fpscr);
-  return ((__old_fpscr >> _FPSCR_ENABLE_SHIFT) & FE_ALL_EXCEPT);
-}
-
-static __inline int fegetexcept(void) {
-  fenv_t __fpscr;
-  fegetenv(&__fpscr);
-  return ((__fpscr & _FPSCR_ENABLE_MASK) >> _FPSCR_ENABLE_SHIFT);
-}
-
-#endif /* __BSD_VISIBLE */
 
 __END_DECLS
 
