@@ -6,9 +6,11 @@ LOCAL_MODULE := helloneon
 
 LOCAL_SRC_FILES := helloneon.c
 
-ifeq ($(TARGET_ARCH_ABI),$(filter $(TARGET_ARCH_ABI), armeabi-v7a x86))
+# todo: zuav:
+#ifeq ($(TARGET_ARCH_ABI),$(filter $(TARGET_ARCH_ABI), armeabi-v7a x86))
 # Clang toolchain don't support yet NEON for x86
-ifeq (,$(and $(filter clang%,$(NDK_TOOLCHAIN_VERSION)),$(filter x86,$(TARGET_ARCH_ABI))))
+#ifeq (,$(and $(filter clang%,$(NDK_TOOLCHAIN_VERSION)),$(filter x86,$(TARGET_ARCH_ABI))))
+ifeq ($(TARGET_ARCH_ABI),$(filter $(TARGET_ARCH_ABI), armeabi-v7a x86 x86_64 arm64-v8a))
     LOCAL_CFLAGS := -DHAVE_NEON=1
 ifeq ($(TARGET_ARCH_ABI),x86)
     LOCAL_CFLAGS += -mssse3
