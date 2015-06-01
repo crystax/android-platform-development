@@ -17,7 +17,7 @@ ifeq ($(TARGET_ARCH_ABI),x86)
 endif
     LOCAL_SRC_FILES += helloneon-intrinsics.c.neon
 endif
-endif
+#endif
 
 LOCAL_STATIC_LIBRARIES := cpufeatures
 
