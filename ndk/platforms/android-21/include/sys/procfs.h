@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Android Open Source Project
+ * Copyright (C) 2014 The Android Open Source Project
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,14 +26,29 @@
  * SUCH DAMAGE.
  */
 
-/*
- * machine/setjmp.h: machine dependent setjmp-related information.
- */
+#ifndef _SYS_PROCFS_H_
+#define _SYS_PROCFS_H_
 
-/* _JBLEN is the size of a jmp_buf in longs.
- * Do not modify this value or you will break the ABI !
- *
- * This value comes from the original OpenBSD ARM-specific header
- * that was replaced by this one.
- */
-#define _JBLEN  160
+#include <sys/cdefs.h>
+#include <sys/ucontext.h>
+
+__BEGIN_DECLS
+
+typedef unsigned long elf_greg_t;
+typedef elf_greg_t elf_gregset_t[NGREG];
+
+typedef fpregset_t elf_fpregset_t;
+
+#if defined(__i386__)
+typedef struct user_fpxregs_struct elf_fpxregset_t;
+#endif
+
+typedef elf_gregset_t prgregset_t;
+typedef elf_fpregset_t prfpregset_t;
+
+typedef pid_t lwpid_t;
+typedef void* psaddr_t;
+
+__END_DECLS
+
+#endif /* _SYS_PROCFS_H_ */
