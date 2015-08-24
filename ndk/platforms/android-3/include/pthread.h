@@ -66,10 +66,13 @@ enum {
 
 
 
+#ifndef _PTHREAD_COND_T_DECLARED
 typedef struct
 {
     int volatile value;
 } pthread_cond_t;
+#define _PTHREAD_COND_T_DECLARED
+#endif
 
 typedef struct
 {

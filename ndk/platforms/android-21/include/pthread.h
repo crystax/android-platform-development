@@ -70,12 +70,15 @@ enum {
     PTHREAD_MUTEX_DEFAULT = PTHREAD_MUTEX_NORMAL
 };
 
+#ifndef _PTHREAD_COND_T_DECLARED
 typedef struct {
   int volatile value;
 #ifdef __LP64__
   char __reserved[44];
 #endif
 } pthread_cond_t;
+#define _PTHREAD_COND_T_DECLARED
+#endif
 
 #define PTHREAD_COND_INITIALIZER  {0 __RESERVED_INITIALIZER}
 
