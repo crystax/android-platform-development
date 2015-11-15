@@ -82,6 +82,7 @@ typedef struct {
 
 #define PTHREAD_COND_INITIALIZER  {0 __RESERVED_INITIALIZER}
 
+#ifndef _PTHREAD_ATTR_T_DECLARED
 typedef struct {
   uint32_t flags;
   void* stack_base;
@@ -93,6 +94,8 @@ typedef struct {
   char __reserved[16];
 #endif
 } pthread_attr_t;
+#define _PTHREAD_ATTR_T_DECLARED
+#endif
 
 typedef long pthread_mutexattr_t;
 typedef long pthread_condattr_t;

@@ -74,6 +74,7 @@ typedef struct
 #define _PTHREAD_COND_T_DECLARED
 #endif
 
+#ifndef _PTHREAD_ATTR_T_DECLARED
 typedef struct
 {
     uint32_t flags;
@@ -83,6 +84,8 @@ typedef struct
     int32_t sched_policy;
     int32_t sched_priority;
 } pthread_attr_t;
+#define _PTHREAD_ATTR_T_DECLARED
+#endif
 
 typedef long pthread_mutexattr_t;
 typedef long pthread_condattr_t;
