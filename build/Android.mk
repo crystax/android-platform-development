@@ -68,7 +68,7 @@ android_stubs: $(full_target)
 # The package installation stuff doesn't know about this file, so nobody will
 # ever be able to write a rule that installs it to a device.
 $(dir $(full_target))javalib.jar: $(full_target)
-	$(hide)$(ACP) $< $@
+	$(copy-file-to-target)
 
 # android.jar is what we put in the SDK package.
 android_jar_intermediates := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/android_jar_intermediates
@@ -76,24 +76,32 @@ android_jar_full_target := $(android_jar_intermediates)/android.jar
 
 $(android_jar_full_target): $(full_target)
 	@echo Package SDK Stubs: $@
-	$(hide)mkdir -p $(dir $@)
-	$(hide)$(ACP) $< $@
+	$(copy-file-to-target)
 
 ALL_SDK_FILES += $(android_jar_full_target)
 
 # ====================================================
 
+# The Jack & Jill compiler jars
+ALL_SDK_FILES += prebuilts/sdk/tools/jacks/jack-$(JACK_SDKTOOL_VERSION).jar
+ALL_SDK_FILES += prebuilts/sdk/tools/jills/jill-$(JACK_SDKTOOL_VERSION).jar
+
+# The Jack reporter tool for code coverage
+ALL_SDK_FILES += prebuilts/sdk/tools/jack-jacoco-reporter.jar
+
 # The uiautomator stubs
 ALL_SDK_FILES += $(TARGET_OUT_COMMON_INTERMEDIATES)/JAVA_LIBRARIES/android_uiautomator_intermediates/javalib.jar
+
+# org.apache.http.legacy.jar stubs
+ALL_SDK_FILES += $(TARGET_OUT_COMMON_INTERMEDIATES)/JAVA_LIBRARIES/org.apache.http.legacy_intermediates/javalib.jar
 
 # $(1): the Java library name
 define _package_sdk_library
 $(eval _psm_build_module := $(TARGET_OUT_COMMON_INTERMEDIATES)/JAVA_LIBRARIES/$(1)_intermediates/javalib.jar)
 $(eval _psm_packaging_target := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/$(1)_intermediates/$(1).jar)
-$(_psm_packaging_target) : $(_psm_build_module) | $(ACP)
+$(_psm_packaging_target) : $(_psm_build_module)
 	@echo "Package $(1).jar: $$@"
-	$(hide) mkdir -p $$(dir $$@)
-	$(hide) $(ACP) $$< $$@
+	$$(copy-file-to-target)
 
 ALL_SDK_FILES += $(_psm_packaging_target)
 $(eval _psm_build_module :=)
@@ -108,12 +116,18 @@ ANDROID_SUPPORT_LIBRARIES := \
     android-support-v7-gridlayout \
     android-support-v7-mediarouter \
     android-support-v7-palette \
+    android-support-v7-preference \
     android-support-v7-recyclerview \
     android-support-v13 \
+    android-support-v14-preference \
     android-support-v17-leanback \
+    android-support-v17-preference-leanback \
     android-support-multidex \
     android-support-multidex-instrumentation \
-    android-support-design
+    android-support-design \
+    android-support-percent \
+    android-support-recommendation \
+    android-support-customtabs
 
 $(foreach lib, $(ANDROID_SUPPORT_LIBRARIES), $(eval $(call _package_sdk_library,$(lib))))
 
@@ -121,20 +135,23 @@ $(foreach lib, $(ANDROID_SUPPORT_LIBRARIES), $(eval $(call _package_sdk_library,
 
 ALL_SDK_FILES += $(HOST_OUT)/development/sdk/generated-api-versions.xml
 
-api_gen_jar := $(TOPDIR)prebuilts/tools/common/api-generator/api-generator-22.9.1.jar
+api_gen_jar := $(TOPDIR)prebuilts/tools/common/api-generator/api-generator-22.9.4.jar
 api_gen_deps := \
-  $(TOPDIR)prebuilts/tools/common/kxml2-tools/kxml2-2.3.0.jar \
-  $(TOPDIR)prebuilts/tools/common/asm-tools/asm-4.0.jar \
-  $(TOPDIR)prebuilts/tools/common/asm-tools/asm-tree-4.0.jar \
-  $(TOPDIR)prebuilts/devtools/tools/lib/common.jar
+  $(TOPDIR)prebuilts/tools/common/m2/repository/net/sf/kxml/kxml2/2.3.0/kxml2-2.3.0.jar \
+  $(TOPDIR)prebuilts/tools/common/m2/repository/org/ow2/asm/asm/5.0.4/asm-5.0.4.jar \
+  $(TOPDIR)prebuilts/tools/common/m2/repository/org/ow2/asm/asm-tree/5.0.4/asm-tree-5.0.4.jar \
+  $(TOPDIR)prebuilts/tools/common/m2/repository/com/google/guava/guava/17.0/guava-17.0.jar
 api_gen_classpath := $(subst $(space),:,$(api_gen_jar) $(api_gen_deps))
 
 
-$(HOST_OUT)/development/sdk/generated-api-versions.xml :
+$(HOST_OUT)/development/sdk/generated-api-versions.xml: $(android_jar_full_target)
 	java -cp $(api_gen_classpath) \
 	  com.android.apigenerator.Main \
 	  --pattern $(TOPDIR)prebuilts/tools/common/api-versions/android-%/android.jar \
 	  --pattern $(TOPDIR)prebuilts/sdk/%/android.jar \
+	  --current-version $(PLATFORM_SDK_VERSION) \
+	  --current-codename $(PLATFORM_VERSION_CODENAME) \
+	  --current-jar $(android_jar_full_target) \
 	  $@
 
 

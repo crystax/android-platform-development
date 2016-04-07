@@ -1,9 +1,9 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS := optional
 
-LOCAL_JAVA_LIBRARIES := android.test.runner telephony-common
+LOCAL_JAVA_LIBRARIES := android.test.runner telephony-common org.apache.http.legacy
 
 LOCAL_SRC_FILES := $(call all-subdir-java-files) \
                 src/com/android/development/IRemoteService.aidl \

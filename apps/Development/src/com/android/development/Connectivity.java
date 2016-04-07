@@ -28,11 +28,16 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.net.ConnectivityManager;
+import android.net.ConnectivityManager.NetworkCallback;
 import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.NetworkUtils;
 import android.net.RouteInfo;
 import android.net.wifi.ScanResult;
+import android.net.wifi.WifiActivityEnergyInfo;
 import android.net.wifi.WifiManager;
 import android.os.RemoteException;
 import android.os.Handler;
@@ -118,6 +123,8 @@ public class Connectivity extends Activity {
     private long mStopTime;
     private long mTotalScanTime = 0;
     private long mTotalScanCount = 0;
+
+    private TextView mLinkStatsResults;
 
     private String mTdlsAddr = null;
 
@@ -251,6 +258,84 @@ public class Connectivity extends Activity {
         }
     }
 
+    private static class DevToolsNetworkCallback extends NetworkCallback {
+        private static final String TAG = "DevToolsNetworkCallback";
+
+        public void onPreCheck(Network network) {
+            Log.d(TAG, "onPreCheck: " + network.netId);
+        }
+
+        public void onAvailable(Network network) {
+            Log.d(TAG, "onAvailable: " + network.netId);
+        }
+
+        public void onCapabilitiesChanged(Network network, NetworkCapabilities nc) {
+            Log.d(TAG, "onCapabilitiesChanged: " + network.netId + " " + nc.toString());
+        }
+
+        public void onLinkPropertiesChanged(Network network, LinkProperties lp) {
+            Log.d(TAG, "onLinkPropertiesChanged: " + network.netId + " " + lp.toString());
+        }
+
+        public void onLosing(Network network, int maxMsToLive) {
+            Log.d(TAG, "onLosing: " + network.netId + " " + maxMsToLive);
+        }
+
+        public void onLost(Network network) {
+            Log.d(TAG, "onLost: " + network.netId);
+        }
+    }
+    private DevToolsNetworkCallback mCallback;
+
+    private class RequestableNetwork {
+        private final NetworkRequest mRequest;
+        private final int mRequestButton, mReleaseButton;
+        private NetworkCallback mCallback;
+
+        public RequestableNetwork(NetworkRequest request, int requestButton, int releaseButton) {
+            mRequest = request;
+            mRequestButton = requestButton;
+            mReleaseButton = releaseButton;
+        }
+
+        public void setRequested(boolean requested) {
+            findViewById(mRequestButton).setEnabled(!requested);
+            findViewById(mReleaseButton).setEnabled(requested);
+        }
+
+        public void request() {
+            if (mCallback == null) {
+                mCallback = new NetworkCallback();
+                mCm.requestNetwork(mRequest, mCallback);
+                setRequested(true);
+            }
+        }
+
+        public void release() {
+            if (mCallback != null) {
+                mCm.unregisterNetworkCallback(mCallback);
+                mCallback = null;
+                setRequested(false);
+            }
+        }
+    }
+
+    private final RequestableNetwork mMmsNetwork = new RequestableNetwork(
+            new NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_MMS)
+                    .build(),
+            R.id.request_mms,
+            R.id.release_mms);
+
+    private final RequestableNetwork mCellNetwork = new RequestableNetwork(
+            new NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    .build(),
+            R.id.request_cell,
+            R.id.release_cell);
+
+    final NetworkRequest mEmptyRequest = new NetworkRequest.Builder().clearCapabilities().build();
 
     @Override
     public void onCreate(Bundle icicle) {
@@ -301,10 +386,10 @@ public class Connectivity extends Activity {
         findViewById(R.id.startTdls).setOnClickListener(mClickListener);
         findViewById(R.id.stopTdls).setOnClickListener(mClickListener);
 
-        findViewById(R.id.start_mms).setOnClickListener(mClickListener);
-        findViewById(R.id.stop_mms).setOnClickListener(mClickListener);
-        findViewById(R.id.start_hipri).setOnClickListener(mClickListener);
-        findViewById(R.id.stop_hipri).setOnClickListener(mClickListener);
+        findViewById(R.id.request_mms).setOnClickListener(mClickListener);
+        findViewById(R.id.release_mms).setOnClickListener(mClickListener);
+        findViewById(R.id.request_cell).setOnClickListener(mClickListener);
+        findViewById(R.id.release_cell).setOnClickListener(mClickListener);
         findViewById(R.id.report_all_bad).setOnClickListener(mClickListener);
         findViewById(R.id.crash).setOnClickListener(mClickListener);
 
@@ -316,13 +401,27 @@ public class Connectivity extends Activity {
         findViewById(R.id.routed_socket_request).setOnClickListener(mClickListener);
         findViewById(R.id.default_request).setOnClickListener(mClickListener);
         findViewById(R.id.default_socket).setOnClickListener(mClickListener);
+        findViewById(R.id.link_stats).setOnClickListener(mClickListener);
+
+        mCellNetwork.setRequested(false);
+        mMmsNetwork.setRequested(false);
 
         registerReceiver(mReceiver, new IntentFilter(CONNECTIVITY_TEST_ALARM));
+
+        mLinkStatsResults = (TextView)findViewById(R.id.stats);
+        mLinkStatsResults.setVisibility(View.VISIBLE);
+
+        mCallback = new DevToolsNetworkCallback();
+        mCm.registerNetworkCallback(mEmptyRequest, mCallback);
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
+        mCellNetwork.release();
+        mMmsNetwork.release();
+        mCm.unregisterNetworkCallback(mCallback);
+        mCallback = null;
         unregisterReceiver(mReceiver);
     }
 
@@ -362,13 +461,11 @@ public class Connectivity extends Activity {
                 case R.id.stopTdls:
                     onStopTdls();
                     break;
-                case R.id.start_mms:
-                    mCm.startUsingNetworkFeature(ConnectivityManager.TYPE_MOBILE,
-                            Phone.FEATURE_ENABLE_MMS);
+                case R.id.request_mms:
+                    mMmsNetwork.request();
                     break;
-                case R.id.stop_mms:
-                    mCm.stopUsingNetworkFeature(ConnectivityManager.TYPE_MOBILE,
-                            Phone.FEATURE_ENABLE_MMS);
+                case R.id.release_mms:
+                    mMmsNetwork.release();
                     break;
                 case R.id.default_socket:
                     onDefaultSocket();
@@ -400,13 +497,14 @@ public class Connectivity extends Activity {
                 case R.id.crash:
                     onCrash();
                     break;
-                case R.id.start_hipri:
-                    mCm.startUsingNetworkFeature(ConnectivityManager.TYPE_MOBILE,
-                            Phone.FEATURE_ENABLE_HIPRI);
+                case R.id.request_cell:
+                    mCellNetwork.request();
                     break;
-                case R.id.stop_hipri:
-                    mCm.stopUsingNetworkFeature(ConnectivityManager.TYPE_MOBILE,
-                            Phone.FEATURE_ENABLE_HIPRI);
+                case R.id.release_cell:
+                    mCellNetwork.release();
+                    break;
+                case R.id.link_stats:
+                    onLinkStats();
                     break;
             }
         }
@@ -543,6 +641,22 @@ public class Connectivity extends Activity {
             mWm.setTdlsEnabledWithMacAddress(mTdlsAddr, false);
         }
     }
+
+    private void onLinkStats() {
+        Log.e(TAG, "LINK STATS:  ");
+        try {
+            WifiActivityEnergyInfo info =
+                    mWm.getControllerActivityEnergyInfo(0);
+            if (info != null) {
+                mLinkStatsResults.setText(" power " + info.toString());
+            } else {
+                mLinkStatsResults.setText(" null! ");
+            }
+        } catch (Exception e) {
+            mLinkStatsResults.setText(" failed! " + e.toString());
+        }
+    }
+
 
     private void onAddDefaultRoute() {
         try {

@@ -16,8 +16,11 @@
 
 """stack symbolizes native crash dumps."""
 
+import os
 import re
+import subprocess
 import symbol
+import tempfile
 import unittest
 
 import example_crashes
@@ -29,7 +32,6 @@ def ConvertTrace(lines):
 
 class TraceConverter:
   process_info_line = re.compile("(pid: [0-9]+, tid: [0-9]+.*)")
-  abi_line = re.compile("(ABI: \'(.*)\')")
   revision_line = re.compile("(Revision: \'(.*)\')")
   signal_line = re.compile("(signal [0-9]+ \(.*\).*)")
   abort_message_line = re.compile("(Abort message: '.*')")
@@ -41,14 +43,16 @@ class TraceConverter:
   sanitizer_trace_line = re.compile("$a")
   value_line = re.compile("$a")
   code_line = re.compile("$a")
+  zipinfo_central_directory_line = re.compile("Central\s+directory\s+entry")
+  zipinfo_central_info_match = re.compile(
+      "^\s*(\S+)$\s*offset of local header from start of archive:\s*(\d+)"
+      ".*^\s*compressed size:\s+(\d+)", re.M | re.S)
   trace_lines = []
   value_lines = []
   last_frame = -1
   width = "{8}"
   spacing = ""
-
-  def __init__(self):
-    self.UpdateAbiRegexes()
+  apk_info = dict()
 
   register_names = {
     "arm": "r0|r1|r2|r3|r4|r5|r6|r7|r8|r9|sl|fp|ip|sp|lr|pc|cpsr",
@@ -86,7 +90,8 @@ class TraceConverter:
         "[ \t]+..[ \t]+"                                     # (space)pc(space).
         "(?P<offset>[0-9a-f]" + self.width + ")[ \t]+"       # Offset (hex number given without
                                                              #         0x prefix).
-        "(?P<dso>[^\r\n \t]*)"                               # Library name.
+        "(?P<dso>\[[^\]]+\]|[^\r\n \t]*)"                    # Library name.
+        "( \(offset (?P<so_offset>0x[0-9a-fA-F]+)\))?"       # Offset into the file to find the start of the shared so.
         "(?P<symbolpresent> \((?P<symbol>.*)\))?")           # Is the symbol there?
                                                              # pylint: disable-msg=C6310
     # Sanitizer output. This is different from debuggerd output, and it is easier to handle this as
@@ -160,17 +165,30 @@ class TraceConverter:
     print
     print "-----------------------------------------------------\n"
 
+  def DeleteApkTmpFiles(self):
+    for _, _, tmp_files in self.apk_info.values():
+      for tmp_file in tmp_files.values():
+        os.unlink(tmp_file)
+
   def ConvertTrace(self, lines):
     lines = map(self.CleanLine, lines)
-    for line in lines:
-      self.ProcessLine(line)
-    self.PrintOutput(self.trace_lines, self.value_lines)
+    try:
+      if not symbol.ARCH:
+        symbol.SetAbi(lines)
+      self.UpdateAbiRegexes()
+      for line in lines:
+        self.ProcessLine(line)
+      self.PrintOutput(self.trace_lines, self.value_lines)
+    finally:
+      # Delete any temporary files created while processing the lines.
+      self.DeleteApkTmpFiles()
 
   def MatchTraceLine(self, line):
     if self.trace_line.match(line):
       match = self.trace_line.match(line)
       return {"frame": match.group("frame"),
               "offset": match.group("offset"),
+              "so_offset": match.group("so_offset"),
               "dso": match.group("dso"),
               "symbol_present": bool(match.group("symbolpresent")),
               "symbol_name": match.group("symbol")}
@@ -178,10 +196,105 @@ class TraceConverter:
       match = self.sanitizer_trace_line.match(line)
       return {"frame": match.group("frame"),
               "offset": match.group("offset"),
+              "so_offset": None,
               "dso": match.group("dso"),
               "symbol_present": False,
               "symbol_name": None}
     return None
+
+  def ExtractLibFromApk(self, apk, shared_lib_name):
+    # Create a temporary file containing the shared library from the apk.
+    tmp_file = None
+    try:
+      tmp_fd, tmp_file = tempfile.mkstemp()
+      if subprocess.call(["unzip", "-p", apk, shared_lib_name], stdout=tmp_fd) == 0:
+        os.close(tmp_fd)
+        shared_file = tmp_file
+        tmp_file = None
+        return shared_file
+    finally:
+      if tmp_file:
+        os.close(tmp_fd)
+        os.unlink(tmp_file)
+    return None
+
+  def ProcessCentralInfo(self, offset_list, central_info):
+    match = self.zipinfo_central_info_match.search(central_info)
+    if not match:
+      raise Exception("Cannot find all info from zipinfo\n" + central_info)
+    name = match.group(1)
+    start = int(match.group(2))
+    end = start + int(match.group(3))
+
+    offset_list.append([name, start, end])
+    return name, start, end
+
+  def GetLibFromApk(self, apk, offset):
+    # Convert the string to hex.
+    offset = int(offset, 16)
+
+    # Check if we already have information about this offset.
+    if apk in self.apk_info:
+      apk_full_path, offset_list, tmp_files = self.apk_info[apk]
+      for file_name, start, end in offset_list:
+        if offset >= start and offset < end:
+          if file_name in tmp_files:
+            return file_name, tmp_files[file_name]
+          tmp_file = self.ExtractLibFromApk(apk_full_path, file_name)
+          if tmp_file:
+            tmp_files[file_name] = tmp_file
+            return file_name, tmp_file
+          break
+      return None, None
+
+    if not "ANDROID_PRODUCT_OUT" in os.environ:
+      print "ANDROID_PRODUCT_OUT environment variable not set."
+      return None, None
+    out_dir = os.environ["ANDROID_PRODUCT_OUT"]
+    if not os.path.exists(out_dir):
+      print "ANDROID_PRODUCT_OUT " + out_dir + " does not exist."
+      return None, None
+    if apk.startswith("/"):
+      apk_full_path = out_dir + apk
+    else:
+      apk_full_path = os.path.join(out_dir, apk)
+    if not os.path.exists(apk_full_path):
+      print "Cannot find apk " + apk;
+      return None, None
+
+    cmd = subprocess.Popen(["zipinfo", "-v", apk_full_path], stdout=subprocess.PIPE)
+    # Find the first central info marker.
+    for line in cmd.stdout:
+      if self.zipinfo_central_directory_line.search(line):
+        break
+
+    central_info = ""
+    file_name = None
+    offset_list = []
+    for line in cmd.stdout:
+      match = self.zipinfo_central_directory_line.search(line)
+      if match:
+        cur_name, start, end = self.ProcessCentralInfo(offset_list, central_info)
+        if not file_name and offset >= start and offset < end:
+          file_name = cur_name
+        central_info = ""
+      else:
+        central_info += line
+    if central_info:
+      cur_name, start, end = self.ProcessCentralInfo(offset_list, central_info)
+      if not file_name and offset >= start and offset < end:
+        file_name = cur_name
+
+    # Save the information from the zip.
+    tmp_files = dict()
+    self.apk_info[apk] = [apk_full_path, offset_list, tmp_files]
+    if not file_name:
+      return None, None
+    tmp_shared_lib = self.ExtractLibFromApk(apk_full_path, file_name)
+    if tmp_shared_lib:
+      tmp_files[file_name] = tmp_shared_lib
+      return file_name, tmp_shared_lib
+    return None, None
 
   def ProcessLine(self, line):
     ret = False
@@ -190,13 +303,11 @@ class TraceConverter:
     abort_message_header = self.abort_message_line.search(line)
     thread_header = self.thread_line.search(line)
     register_header = self.register_line.search(line)
-    abi_header = self.abi_line.search(line)
     revision_header = self.revision_line.search(line)
     dalvik_jni_thread_header = self.dalvik_jni_thread_line.search(line)
     dalvik_native_thread_header = self.dalvik_native_thread_line.search(line)
-    if process_header or signal_header or abort_message_header or thread_header or abi_header or \
+    if process_header or signal_header or abort_message_header or thread_header or \
         register_header or dalvik_jni_thread_header or dalvik_native_thread_header or revision_header:
-      ret = True
       if self.trace_lines or self.value_lines:
         self.PrintOutput(self.trace_lines, self.value_lines)
         self.PrintDivider()
@@ -219,17 +330,14 @@ class TraceConverter:
         print dalvik_native_thread_header.group(1)
       if revision_header:
         print revision_header.group(1)
-      if abi_header:
-        print abi_header.group(1)
-        symbol.ARCH = abi_header.group(2)
-        self.UpdateAbiRegexes()
-      return ret
+      return True
     trace_line_dict = self.MatchTraceLine(line)
     if trace_line_dict is not None:
       ret = True
       frame = trace_line_dict["frame"]
       code_addr = trace_line_dict["offset"]
       area = trace_line_dict["dso"]
+      so_offset = trace_line_dict["so_offset"]
       symbol_present = trace_line_dict["symbol_present"]
       symbol_name = trace_line_dict["symbol_name"]
 
@@ -243,9 +351,19 @@ class TraceConverter:
       if area == "<unknown>" or area == "[heap]" or area == "[stack]":
         self.trace_lines.append((code_addr, "", area))
       else:
+        # If this is an apk, it usually means that there is actually
+        # a shared so that was loaded directly out of it. In that case,
+        # extract the shared library and the name of the shared library.
+        lib = None
+        if area.endswith(".apk") and so_offset:
+          lib_name, lib = self.GetLibFromApk(area, so_offset)
+        if not lib:
+          lib = area
+          lib_name = None
+
         # If a calls b which further calls c and c is inlined to b, we want to
         # display "a -> b -> c" in the stack trace instead of just "a -> c"
-        info = symbol.SymbolInformation(area, code_addr)
+        info = symbol.SymbolInformation(lib, code_addr)
         nest_count = len(info) - 1
         for (source_symbol, source_location, object_symbol_with_offset) in info:
           if not source_symbol:
@@ -255,6 +373,8 @@ class TraceConverter:
               source_symbol = "<unknown>"
           if not source_location:
             source_location = area
+            if lib_name:
+              source_location += "(" + lib_name + ")"
           if nest_count > 0:
             nest_count = nest_count - 1
             arrow = "v------>"
@@ -300,7 +420,10 @@ class TraceConverter:
 class RegisterPatternTests(unittest.TestCase):
   def assert_register_matches(self, abi, example_crash, stupid_pattern):
     tc = TraceConverter()
-    for line in example_crash.split('\n'):
+    lines = example_crash.split('\n')
+    symbol.SetAbi(lines)
+    tc.UpdateAbiRegexes()
+    for line in lines:
       tc.ProcessLine(line)
       is_register = (re.search(stupid_pattern, line) is not None)
       matched = (tc.register_line.search(line) is not None)
