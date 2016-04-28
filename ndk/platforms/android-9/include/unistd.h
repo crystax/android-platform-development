@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 The Android Open Source Project
+ * Copyright (C) 2008, 2016 The Android Open Source Project
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@
 #define _UNISTD_H_
 
 #include <stddef.h>
+#include <limits.h>
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/select.h>
