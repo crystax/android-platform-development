@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 The Android Open Source Project
+ * Copyright (C) 2008, 2016 The Android Open Source Project
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
 #ifndef _BYTESWAP_H_
 #define _BYTESWAP_H_
 
-#include <sys/endian.h>
+#include <endian.h>
 
 #define bswap_16(x) __swap16(x)
 #define bswap_32(x) __swap32(x)
