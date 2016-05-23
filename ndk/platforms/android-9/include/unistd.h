@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 The Android Open Source Project
+ * Copyright (C) 2008, 2016 The Android Open Source Project
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@
 #define _UNISTD_H_
 
 #include <stddef.h>
+#include <limits.h>
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/select.h>
@@ -169,12 +170,7 @@ extern int ttyname_r(int, char*, size_t);
 extern int  acct(const char*  filepath);
 
 static __inline__ int getpagesize(void) {
-  extern unsigned int __page_size;
-  return __page_size;
-}
-static __inline__ int __getpageshift(void) {
-  extern unsigned int __page_shift;
-  return __page_shift;
+  return PAGE_SIZE;
 }
 
 long sysconf(int);
